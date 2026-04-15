@@ -63,6 +63,7 @@ model linked_accounts {
   last_sync_at         DateTime? @db.Timestamptz
   sync_error_code      String?   @db.Text
   sync_error_at        DateTime? @db.Timestamptz
+  sync_failure_count   Int       @default(0)
   token_invalidated_at DateTime? @db.Timestamptz
 
   user users @relation(fields: [user_id], references: [id])

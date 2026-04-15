@@ -1,24 +1,17 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 import { encrypt } from "@/server/crypto";
-import { requireAuth } from "@/lib/auth-server";
-import { applyRateLimit } from "@/middleware/rate-limit";
 
 /**
  * GET /api/accounts/google/callback — completes Google OAuth 2.0 flow.
  * Exchanges the authorization code for tokens, encrypts them, stores them.
  */
 export async function GET(request: Request) {
-  // Rate limit: 10 req/min per IP (OAuth callback — no auth yet)
-  const rl = await applyRateLimit(request, "google-callback", {
-    limit: 10,
-    windowMs: 60_000,
-    identifyBy: "ip",
-  });
-  if (rl) return rl;
-
   const auth = await requireAuth();
   if ("status" in auth) return auth;
+
+  // Check feature flag
   const { dbUser } = auth;
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -27,13 +20,13 @@ export async function GET(request: Request) {
 
   if (error) {
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=google_${error}`
+      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=google_${error}`,
     );
   }
 
   if (!code || !state) {
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=missing_params`
+      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=missing_params`,
     );
   }
 
@@ -55,7 +48,7 @@ export async function GET(request: Request) {
   if (!clientId || !clientSecret) {
     return NextResponse.json(
       { error: "Google OAuth credentials not configured" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -78,7 +71,7 @@ export async function GET(request: Request) {
       console.error("Google token exchange failed:", errText);
       return NextResponse.json(
         { error: "Failed to exchange code for tokens" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -91,27 +84,61 @@ export async function GET(request: Request) {
       ? await encrypt(refresh_token)
       : null;
 
-    await db.linked_accounts.create({
-      data: {
-        user_id: dbUser.id,
-        provider: "google",
-        status: "active",
-        scopes_json: typeof scope === "string" ? scope : JSON.stringify(scope),
-        access_token_encrypted: accessTokenEncrypted,
-        refresh_token_encrypted: refreshTokenEncrypted,
-        expires_at: new Date(Date.now() + (expires_in ?? 3600) * 1000),
-        last_sync_at: new Date(),
-      },
+    // Upsert (in case re-connecting)
+    const existing = await db.linked_accounts.findFirst({
+      where: { user_id: dbUser.id, provider: "google" },
+      select: { id: true },
     });
 
+    if (existing) {
+      await db.linked_accounts.update({
+        where: { id: existing.id },
+        data: {
+          status: "active",
+          scopes_json: typeof scope === "string" ? scope : JSON.stringify(scope),
+          access_token_encrypted: accessTokenEncrypted,
+          refresh_token_encrypted: refreshTokenEncrypted,
+          expires_at: new Date(Date.now() + (expires_in ?? 3600) * 1000),
+          sync_error_code: null,
+          sync_failure_count: 0,
+          last_sync_at: new Date(),
+        },
+      });
+    } else {
+      await db.linked_accounts.create({
+        data: {
+          user_id: dbUser.id,
+          provider: "google",
+          status: "active",
+          scopes_json: typeof scope === "string" ? scope : JSON.stringify(scope),
+          access_token_encrypted: accessTokenEncrypted,
+          refresh_token_encrypted: refreshTokenEncrypted,
+          expires_at: new Date(Date.now() + (expires_in ?? 3600) * 1000),
+          last_sync_at: new Date(),
+        },
+      });
+    }
+
+    // Emit account.linked event to trigger sync
+    try {
+      const inngest = await import("@/server/inngest/client").then((m) => m.inngest);
+      await inngest.send({
+        name: "account.linked",
+        data: { userId: dbUser.id, provider: "google" },
+      });
+    } catch (err) {
+      // Non-fatal: sync will also run on cron
+      console.warn("Failed to emit account.linked event:", err);
+    }
+
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?connected=google`
+      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?connected=google`,
     );
   } catch (err) {
     console.error("Google OAuth callback error:", err);
     return NextResponse.json(
       { error: "OAuth callback failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -7,6 +7,8 @@ import {
   generateAllDailyBriefs,
   batchAnnotateArticles,
   scheduleIngressAnnotations,
+  syncXSignals,
+  syncGoogleSignals,
 } from "@/server/inngest";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,8 @@ const handler = serve({
     generateDailyBrief,
     generateAllDailyBriefs,
     scheduleIngressAnnotations,
+    syncXSignals,
+    syncGoogleSignals,
   ],
 });
 
