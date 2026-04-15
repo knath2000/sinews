@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
+import { requireAuth } from "@/lib/auth-server";
 
 /**
  * DELETE /api/accounts/:provider — disconnect and purge tokens for a provider.
@@ -9,6 +10,10 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ provider: string }> }
 ) {
+  const auth = await requireAuth();
+  if ("status" in auth) return auth;
+  const { dbUser } = auth;
+
   const { provider } = await params;
 
   if (!provider || !["x", "google"].includes(provider)) {
@@ -18,12 +23,9 @@ export async function DELETE(
     );
   }
 
-  // TODO: resolve actual user_id from session
-  const userId = "demo-user";
-
   const result = await db.linked_accounts.updateMany({
     where: {
-      user_id: userId,
+      user_id: dbUser.id,
       provider,
       status: "active",
     },

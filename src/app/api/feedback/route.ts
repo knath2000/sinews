@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { submitFeedback } from "@/server/feed-loader";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function POST(request: Request) {
+  const auth = await requireAuth();
+  if ("status" in auth) return auth;
+  const { dbUser } = auth;
+
   try {
     const body = await request.json();
     const { briefItemId, eventType, articleId } = body as {
@@ -17,10 +22,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // TODO: wire up real user authentication
-    const demoUserId = process.env.DEMO_USER_ID || "demo-user";
-
-    await submitFeedback(demoUserId, briefItemId, eventType, articleId);
+    await submitFeedback(dbUser.id, briefItemId, eventType, articleId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -101,3 +101,46 @@ The application uses the following main tables:
 | `npx prisma generate` | Generate Prisma client types    |
 | `npx prisma db push`  | Push schema to database         |
 | `npx prisma studio`   | Open Prisma Studio (DB GUI)     |
+
+## API Authentication
+
+All user-facing API routes require authentication via the `requireAuth()` helper in `src/lib/auth-server.ts`. This verifies the Supabase session and ensures a corresponding DB user exists.
+
+Admin routes (under `/api/admin/*`) use `requireAdmin()` from `src/lib/auth-admin.ts`, which requires both authentication and that the user's `user_profiles.is_admin` flag is `true`.
+
+**Authenticated routes:**
+- `GET /api/me` — current user info
+- `POST /api/onboarding` — complete onboarding
+- `GET /api/briefs/today` — today's daily brief
+- `GET /api/feed` — article feed
+- `POST /api/feedback` — submit feedback
+- `DELETE /api/accounts/:provider` — disconnect a linked account
+- `GET /api/accounts/google/callback` — Google OAuth callback
+- `GET /api/accounts/x/callback` — X OAuth callback
+- `POST /api/accounts/delete` — delete account
+
+**Public routes:**
+- `POST /api/auth/sign-in` — send magic link
+- `GET /api/auth/sign-out` — sign out
+- `POST /api/accounts/google/start` — start Google OAuth
+- `POST /api/accounts/x/start` — start X OAuth
+- `/api/inngest` — Inngest webhooks (authenticated by Inngest)
+
+**Admin routes:** require `user_profiles.is_admin = true`
+- `GET /api/admin/users` — list all users
+
+## Account Deletion
+
+Users can permanently delete their accounts via `POST /api/accounts/delete` or through the Settings page. Deletion is atomic (Prisma transaction) and removes:
+
+1. **interest_signals** — behavioral interest data
+2. **feedback_events** — like/dismiss signals  
+3. **daily_briefs** — cascades to daily_brief_items
+4. **linked_accounts** — OAuth token records
+5. **user_topic_preferences** — manual topic selections
+6. **user_profiles** — profile settings
+7. **users** — core user record
+
+After the database deletion, the Supabase auth user is also deleted via the Admin API (`/admin/users/{id}`). If the Supabase deletion fails, the local database deletion still persists.
+
+The `is_admin` flag on `user_profiles` controls admin access. Only admins can access `/api/admin/*` routes.

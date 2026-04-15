@@ -1,23 +1,17 @@
 import { NextResponse } from "next/server";
 import { loadTodaysBrief } from "@/server/feed-loader";
+import { requireAuth } from "@/lib/auth-server";
 
 /**
  * GET /api/feed — returns today's 5-article brief.
- * In demo mode (no auth), returns 202 until a real user_id is available.
+ * Requires authentication.
  */
 export async function GET() {
-  // TODO: wire up real user authentication
-  // For now, use a demo user or return 202
-  const demoUserId = process.env.DEMO_USER_ID || "";
+  const auth = await requireAuth();
+  if ("status" in auth) return auth;
+  const { dbUser } = auth;
 
-  if (!demoUserId) {
-    return NextResponse.json(
-      { message: "No user configured. Set DEMO_USER_ID env var." },
-      { status: 202 }
-    );
-  }
-
-  const brief = await loadTodaysBrief(demoUserId);
+  const brief = await loadTodaysBrief(dbUser.id);
 
   if (!brief) {
     return NextResponse.json(

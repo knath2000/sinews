@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
 import { encrypt } from "@/server/crypto";
+import { requireAuth } from "@/lib/auth-server";
 
 /**
  * GET /api/accounts/google/callback — completes Google OAuth 2.0 flow.
  * Exchanges the authorization code for tokens, encrypts them, stores them.
  */
 export async function GET(request: Request) {
+  const auth = await requireAuth();
+  if ("status" in auth) return auth;
+  const { dbUser } = auth;
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -78,12 +82,9 @@ export async function GET(request: Request) {
       ? await encrypt(refresh_token)
       : null;
 
-    // TODO: resolve actual user_id from session
-    const userId = "demo-user";
-
     await db.linked_accounts.create({
       data: {
-        user_id: userId,
+        user_id: dbUser.id,
         provider: "google",
         status: "active",
         scopes_json: typeof scope === "string" ? scope : JSON.stringify(scope),

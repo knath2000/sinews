@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { ensureUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 import { MIN_TOPIC_SELECTIONS } from "@/lib/constants";
@@ -10,19 +9,11 @@ import { MIN_TOPIC_SELECTIONS } from "@/lib/constants";
  * Save selected (at least 5) topics and the user's timezone.
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const auth = await requireAuth();
+  if ("status" in auth) return auth;
+  const { dbUser } = auth;
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await ensureUser(session.user.id, session.user.email ?? "");
-
-  if (user.profile?.onboarding_complete) {
+  if (dbUser.profile?.onboarding_complete) {
     return NextResponse.json(
       { error: "Onboarding already complete" },
       { status: 400 }
@@ -77,7 +68,7 @@ export async function POST(request: Request) {
       // Upsert topic preferences
       await tx.user_topic_preferences.createMany({
         data: uniqueTopics.map((topic) => ({
-          user_id: user.id,
+          user_id: dbUser.id,
           topic,
           weight: 1.0,
           source: "manual_topic",
@@ -85,9 +76,9 @@ export async function POST(request: Request) {
         skipDuplicates: true,
       });
 
-        // Mark onboarding as complete
+      // Mark onboarding as complete
       await tx.user_profiles.update({
-        where: { user_id: user.id },
+        where: { user_id: dbUser.id },
         data: {
           onboarding_complete: true,
         },

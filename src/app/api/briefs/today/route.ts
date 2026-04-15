@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { ensureUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 
 /**
@@ -8,19 +7,11 @@ import { db } from "@/server/db/client";
  * Returns today's brief or queues generation.
  */
 export async function GET() {
-  const supabase = await createClient();
+  const auth = await requireAuth();
+  if ("status" in auth) return auth;
+  const { dbUser } = auth;
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await ensureUser(session.user.id, session.user.email ?? "");
-
-  if (!user.profile?.onboarding_complete) {
+  if (!dbUser.profile?.onboarding_complete) {
     return NextResponse.json(
       { error: "Complete onboarding first", needsOnboarding: true },
       { status: 403 }
@@ -35,7 +26,7 @@ export async function GET() {
     // Check if a brief exists for today
     const existingBrief = await db.daily_briefs.findFirst({
       where: {
-        user_id: user.id,
+        user_id: dbUser.id,
         brief_date: today,
       },
       include: {
@@ -76,7 +67,6 @@ export async function GET() {
     }
 
     // Brief doesn't exist yet — return status indicating it's not ready
-    // In a real app, you'd trigger a queue job here via Inngest
     return NextResponse.json({
       brief: null,
       status: "pending",
