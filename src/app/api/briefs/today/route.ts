@@ -1,15 +1,25 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
+import type { NextRequest } from "next/server";
+import { applyRateLimit } from "@/middleware/rate-limit";
 
 /**
  * GET /api/briefs/today
  * Returns today's brief or queues generation.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const auth = await requireAuth();
   if ("status" in auth) return auth;
   const { dbUser } = auth;
+
+  // Rate limit: 20 requests per 60 seconds per user
+  const rl = await applyRateLimit(request, "briefs-today", {
+    limit: 20,
+    windowMs: 60_000,
+    identifyBy: "user",
+  });
+  if (rl) return rl;
 
   if (!dbUser.profile?.onboarding_complete) {
     return NextResponse.json(

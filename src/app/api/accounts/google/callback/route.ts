@@ -2,12 +2,21 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
 import { encrypt } from "@/server/crypto";
 import { requireAuth } from "@/lib/auth-server";
+import { applyRateLimit } from "@/middleware/rate-limit";
 
 /**
  * GET /api/accounts/google/callback — completes Google OAuth 2.0 flow.
  * Exchanges the authorization code for tokens, encrypts them, stores them.
  */
 export async function GET(request: Request) {
+  // Rate limit: 10 req/min per IP (OAuth callback — no auth yet)
+  const rl = await applyRateLimit(request, "google-callback", {
+    limit: 10,
+    windowMs: 60_000,
+    identifyBy: "ip",
+  });
+  if (rl) return rl;
+
   const auth = await requireAuth();
   if ("status" in auth) return auth;
   const { dbUser } = auth;

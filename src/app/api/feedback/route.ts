@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { submitFeedback } from "@/server/feed-loader";
 import { requireAuth } from "@/lib/auth-server";
+import { applyRateLimit } from "@/middleware/rate-limit";
 
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if ("status" in auth) return auth;
   const { dbUser } = auth;
+
+  // Rate limit: 60 requests per 60 seconds per user
+  const rl = await applyRateLimit(
+    request as any,
+    "feedback",
+    { limit: 60, windowMs: 60_000, identifyBy: "user" },
+  );
+  if (rl) return rl;
 
   try {
     const body = await request.json();
