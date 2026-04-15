@@ -11,6 +11,25 @@ import { invalidateFlagCache } from "@/server/feature-flags";
  * Body: { flagKey: "enable_x_sync", enabled: true }
  * Upserts into the feature_flags table and invalidates the local cache.
  */
+export async function GET() {
+  const auth = await requireAdmin();
+  if ("status" in auth) return auth;
+
+  try {
+    const flags = await db.feature_flags.findMany({
+      select: { flag_key: true, enabled: true },
+    });
+
+    return NextResponse.json({ flags });
+  } catch (error) {
+    console.error("Error listing flags:", error);
+    return NextResponse.json(
+      { error: "Failed to list flags" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function POST(request: Request) {
   const auth = await requireAdmin();
   if ("status" in auth) return auth;
