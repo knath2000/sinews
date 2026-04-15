@@ -2,6 +2,7 @@
 
 import { useState, useTransition, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useSupabase } from "@/lib/supabase-provider";
 
 function LoginContent() {
@@ -116,6 +117,19 @@ function LoginContent() {
         <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-500">
           We&#39;ll send you a secure one-time authentication link.
           No password required.
+        </p>
+
+        {/* Consent links */}
+        <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
+          By creating an account, you agree to our{" "}
+          <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
+            Privacy Policy
+          </Link>{" "}
+          and{" "}
+          <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
+            Terms of Service
+          </Link>
+          .
         </p>
       </div>
     </div>

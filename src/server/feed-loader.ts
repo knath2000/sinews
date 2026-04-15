@@ -12,6 +12,7 @@ interface FeedArticle {
   published_at: Date | null;
   summary: string | null;
   why_recommended: string | null;
+  matched_signals: string[] | null;
   rank: number;
   score: number;
   brief_item_id: number;
@@ -40,7 +41,11 @@ export async function loadTodaysBrief(userId: string): Promise<{
       daily_brief_items: {
         orderBy: { rank: "asc" },
         include: {
-          article: true,
+          article: {
+            include: {
+              article_annotations: true,
+            },
+          },
         },
       },
     },
@@ -63,12 +68,49 @@ export async function loadTodaysBrief(userId: string): Promise<{
     published_at: item.article?.published_at ?? null,
     summary: item.summary,
     why_recommended: item.why_recommended,
+    matched_signals: item.article?.article_annotations
+      ? deriveMatchedSignals(
+          item.article.article_annotations.topics_json,
+          item.article.article_annotations.entities_json
+        )
+      : null,
     rank: item.rank,
     score: item.score,
     brief_item_id: item.id,
   }));
 
   return { articles, generatedAt: brief.generated_at };
+}
+
+/**
+ * Derive matched signals array from article annotations JSON strings.
+ * Returns null if annotations are missing.
+ */
+function deriveMatchedSignals(
+  topicsJson: string | null,
+  entitiesJson: string | null
+): string[] | null {
+  const signals: string[] = [];
+  try {
+    if (topicsJson) {
+      const topics = JSON.parse(topicsJson) as string[] | { topic?: string }[];
+      if (Array.isArray(topics)) {
+        topics.forEach((t) => {
+          if (typeof t === "string") signals.push(t);
+          else if (typeof t === "object" && t.topic) signals.push(t.topic);
+        });
+      }
+    }
+    if (entitiesJson) {
+      const entities = JSON.parse(entitiesJson) as string[];
+      if (Array.isArray(entities)) {
+        signals.push(...entities.slice(0, 3)); // cap at 3 entities
+      }
+    }
+  } catch {
+    return null;
+  }
+  return signals.length > 0 ? signals : null;
 }
 
 /**

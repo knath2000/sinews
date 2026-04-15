@@ -91,6 +91,12 @@ export default function LandingPage() {
             <Link href="/admin" className="hover:text-zinc-700 dark:hover:text-zinc-200">
               Admin
             </Link>
+            <Link href="/privacy" className="hover:text-zinc-700 dark:hover:text-zinc-200">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-zinc-700 dark:hover:text-zinc-200">
+              Terms
+            </Link>
           </div>
         </div>
       </footer>

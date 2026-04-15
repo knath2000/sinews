@@ -23,6 +23,12 @@ export const TOPIC_DISPLAY_NAMES: Record<string, string> = {
 
 export const MIN_TOPIC_SELECTIONS = 5;
 
+/**
+ * Current consent version. When we update policies, bump this.
+ * Users whose consent_version_accepted < this value will be prompted to re-consent.
+ */
+export const CURRENT_CONSENT_VERSION = "v1.0";
+
 export const TIMEZONES = [
   "Pacific/Auckland",
   "Australia/Sydney",

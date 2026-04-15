@@ -8,7 +8,9 @@ import {
   ThumbsDown,
   Clock,
   Sparkles,
+  Shield,
 } from "lucide-react";
+import { CURRENT_CONSENT_VERSION } from "@/lib/constants";
 
 interface FeedArticleData {
   id: number;
@@ -18,6 +20,7 @@ interface FeedArticleData {
   published_at: string | null;
   summary: string | null;
   why_recommended: string | null;
+  matched_signals: string[] | null;
   rank: number;
   score: number;
   brief_item_id: number;
@@ -141,6 +144,23 @@ function ArticleCard({
         </div>
       )}
 
+      {/* Matched signals */}
+      {article.matched_signals && article.matched_signals.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {article.matched_signals.map((signal) => {
+            const display = signal.replace(/_/g, " ");
+            return (
+              <span
+                key={signal}
+                className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
+              >
+                {display}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
         <div className="flex gap-1">
@@ -212,6 +232,12 @@ function getDemoArticles(): FeedArticleData[] {
       "Matches your interest in tech policy and regulation.",
       "You frequently engage with open-source ML content.",
     ][i] ?? "Based on your reading patterns.",
+    matched_signals: [
+      ["openai", "artificial_intelligence", "language_models"],
+      ["deepmind", "nature", "protein_folding"],
+      ["tech_policy_regulation", "european_union"],
+      ["open_source", "machine_learning", "llama"],
+    ][i] ?? null,
     rank: i + 1,
     score: 5 - i * 0.8,
     brief_item_id: i + 1,
@@ -224,9 +250,26 @@ export default function FeedPage() {
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
 
   const [demoMode, setDemoMode] = useState(false);
+  const [consentNeeded, setConsentNeeded] = useState(false);
+  const [acceptingConsent, setAcceptingConsent] = useState(false);
 
   useEffect(() => {
-    async function loadBrief() {
+    async function load() {
+      // Check consent first
+      try {
+        const consentRes = await fetch("/api/settings/consent");
+        if (consentRes.ok) {
+          const consentData = await consentRes.json();
+          if (!consentData.isCurrent) {
+            setConsentNeeded(true);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Continue without blocking on consent check error
+      }
+
       try {
         const res = await fetch("/api/feed");
         if (res.ok) {
@@ -243,8 +286,24 @@ export default function FeedPage() {
         setLoading(false);
       }
     }
-    loadBrief();
+    load();
   }, []);
+
+  const handleAcceptConsent = async () => {
+    setAcceptingConsent(true);
+    try {
+      const res = await fetch("/api/settings/consent", { method: "POST" });
+      if (res.ok) {
+        setConsentNeeded(false);
+        // Reload the page to trigger the brief load
+        window.location.reload();
+        return;
+      }
+    } catch {
+      // fall through
+    }
+    setAcceptingConsent(false);
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -274,6 +333,45 @@ export default function FeedPage() {
           <p className="text-xs text-zinc-400 mb-6">
             Updated today at {formatTime(generatedAt)}
           </p>
+        )}
+
+        {/* Consent re-consent prompt */}
+        {consentNeeded && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="p-4 rounded-full bg-blue-50 dark:bg-blue-950 mb-6">
+              <Shield className="w-8 h-8 text-blue-500" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">
+              Updated Privacy Policy & Terms
+            </h2>
+            <p className="text-zinc-500 dark:text-zinc-400 max-w-sm mb-6 leading-relaxed">
+              We&apos;ve updated our Privacy Policy and Terms of Service. Please review
+              and accept them to continue using the service.
+            </p>
+            <div className="flex gap-6 mb-6 text-sm">
+              <Link
+                href="/privacy"
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+                target="_blank"
+              >
+                Privacy Policy →
+              </Link>
+              <Link
+                href="/terms"
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+                target="_blank"
+              >
+                Terms of Service →
+              </Link>
+            </div>
+            <button
+              onClick={handleAcceptConsent}
+              disabled={acceptingConsent}
+              className="px-6 py-3 text-sm font-semibold rounded-full bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50"
+            >
+              {acceptingConsent ? "Accepting..." : "I Agree & Continue"}
+            </button>
+          </div>
         )}
 
         {loading ? (

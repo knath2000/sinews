@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { X as XIcon, Wifi } from "lucide-react";
+import { X as XIcon, Wifi, CircleUser, Building2 } from "lucide-react";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 
 interface LinkedAccountInfo {
@@ -9,6 +9,8 @@ interface LinkedAccountInfo {
   status: string;
   expires_at: string | null;
   last_sync_at: string | null;
+  sync_error_code?: string | null;
+  sync_error_at?: string | null;
 }
 
 export default function SettingsPage({
@@ -21,6 +23,8 @@ export default function SettingsPage({
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccountInfo[]>([]);
   const [topics, setTopics] = useState<Set<string>>(new Set());
   const [savingTopic, setSavingTopic] = useState<string | null>(null);
+  const [briefHour, setBriefHour] = useState(4);
+  const [showAllTopics, setShowAllTopics] = useState(false);
 
   // Resolve search params once on client
   useEffect(() => {
@@ -32,7 +36,7 @@ export default function SettingsPage({
     }
   }, [searchParams]);
 
-  // Load accounts + topics on mount
+  // Load accounts + topics + brief hour on mount
   useEffect(() => {
     fetch("/api/settings/accounts")
       .then((r) => (r.ok ? r.json() : null))
@@ -54,7 +58,35 @@ export default function SettingsPage({
         }
       })
       .catch(() => {});
+
+    fetch("/api/settings/brief-hour")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (typeof data?.hour === "number") setBriefHour(data.hour);
+      })
+      .catch(() => {});
   }, []);
+
+  // Helper: derive account status with display info
+  function getAccountStatus(account: LinkedAccountInfo | undefined) {
+    if (!account) return { label: "Disconnected", color: "gray" as const };
+    if (account.status === "active") return { label: "Connected", color: "green" as const };
+    if (account.status === "error" || account.sync_error_code) return { label: "Sync Error", color: "yellow" as const };
+    return { label: "Disconnected", color: "gray" as const };
+  }
+
+  function formatLastSync(at: string | null) {
+    if (!at) return null;
+    try {
+      const d = new Date(at);
+      return d.toLocaleString("en-US", {
+        month: "short", day: "numeric",
+        hour: "numeric", minute: "2-digit",
+      });
+    } catch {
+      return at;
+    }
+  }
 
   // Helper: is a provider connected?
   const isConnected = (provider: string) => {
@@ -85,6 +117,27 @@ export default function SettingsPage({
       // Silently fail – user can retry
     } finally {
       setSavingTopic(null);
+    }
+  }
+
+  async function handleBriefHourChange(hour: number) {
+    setBriefHour(hour);
+    try {
+      const res = await fetch("/api/settings/brief-hour", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hour }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        fetch("/api/settings/brief-hour").then((r) => r.json()).then((d) => {
+          if (typeof d?.hour === "number") setBriefHour(d.hour);
+        }).catch(() => {});
+      }
+    } catch {
+      fetch("/api/settings/brief-hour").then((r) => r.json()).then((d) => {
+        if (typeof d?.hour === "number") setBriefHour(d.hour);
+      }).catch(() => {});
     }
   }
 
@@ -134,6 +187,7 @@ export default function SettingsPage({
               provider="x"
               label="X / Twitter"
               connected={isConnected("x")}
+              account={linkedAccounts.find((a) => a.provider === "x")}
               onDisconnected={() =>
                 setLinkedAccounts((prev) =>
                   prev.map((a) =>
@@ -141,11 +195,14 @@ export default function SettingsPage({
                   )
                 )
               }
+              getStatus={getAccountStatus}
+              formatLastSync={formatLastSync}
             />
             <ProviderCard
               provider="google"
               label="Google"
               connected={isConnected("google")}
+              account={linkedAccounts.find((a) => a.provider === "google")}
               onDisconnected={() =>
                 setLinkedAccounts((prev) =>
                   prev.map((a) =>
@@ -153,7 +210,50 @@ export default function SettingsPage({
                   )
                 )
               }
+              getStatus={getAccountStatus}
+              formatLastSync={formatLastSync}
             />
+            <ComingSoonCard
+              Icon={CircleUser}
+              label="Facebook"
+              description="Not yet supported — coming soon"
+            />
+            <ComingSoonCard
+              Icon={Building2}
+              label="Microsoft"
+              description="Not yet supported — coming soon"
+            />
+          </div>
+        </section>
+
+        {/* Brief Ready Hour */}
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-4">Brief Delivery Time</h2>
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              Set the local hour when your daily briefing will be ready. Your brief is generated shortly before this time.
+            </p>
+            <div className="flex items-center gap-3">
+              <label htmlFor="brief-hour" className="text-sm text-zinc-600 dark:text-zinc-400">
+                Brief ready at:
+              </label>
+              <select
+                id="brief-hour"
+                value={briefHour}
+                onChange={(e) => handleBriefHourChange(parseInt(e.target.value, 10))}
+                className="rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {Array.from({ length: 24 }, (_, h) => {
+                  const display12 = h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`;
+                  return (
+                    <option key={h} value={h}>
+                      {h}:00 {display12}
+                    </option>
+                  );
+                })}
+              </select>
+              <span className="text-xs text-zinc-400">local time</span>
+            </div>
           </div>
         </section>
 
@@ -167,16 +267,28 @@ export default function SettingsPage({
               adjust weights manually.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {TOPIC_TAXONOMY.map((topic) => (
-                <TopicBadge
-                  key={topic}
-                  topic={topic}
-                  checked={topics.has(topic)}
-                  disabled={savingTopic === topic}
-                  onChange={toggleTopic}
-                />
-              ))}
+              {TOPIC_TAXONOMY.map((topic) => {
+                const display = topic.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                if (!showAllTopics && !topics.has(topic)) return null;
+                return (
+                  <TopicBadge
+                    key={topic}
+                    topic={topic}
+                    checked={topics.has(topic)}
+                    disabled={savingTopic === topic}
+                    onChange={toggleTopic}
+                  />
+                );
+              })}
             </div>
+            {!showAllTopics && (
+              <button
+                onClick={() => setShowAllTopics(true)}
+                className="mt-3 text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline"
+              >
+                Show all {TOPIC_TAXONOMY.length} topics
+              </button>
+            )}
           </div>
         </section>
 
@@ -199,6 +311,14 @@ export default function SettingsPage({
                 We do not sell, share, or resell your data. Your reading
                 interests are used solely to curate your briefing.
               </p>
+              <div className="flex gap-4 pt-2">
+                <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">
+                  Privacy Policy →
+                </Link>
+                <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">
+                  Terms of Service →
+                </Link>
+              </div>
             </div>
           </div>
         </section>
@@ -227,14 +347,42 @@ function ProviderCard({
   provider,
   label,
   connected,
+  account,
   onDisconnected,
+  getStatus,
+  formatLastSync,
 }: {
   provider: string;
   label: string;
   connected: boolean;
+  account?: LinkedAccountInfo;
   onDisconnected: () => void;
+  getStatus: (acc: LinkedAccountInfo | undefined) => { label: string; color: "green" | "yellow" | "gray" };
+  formatLastSync: (at: string | null) => string | null;
 }) {
   const IconComponent = provider === "x" ? XIcon : Wifi;
+  const { label: statusLabel, color } = getStatus(account);
+  const lastSyncStr = formatLastSync(account?.last_sync_at ?? null);
+
+  const badgeColors: Record<string, { bg: string; text: string; dot: string }> = {
+    green: {
+      bg: "bg-green-100 dark:bg-green-900",
+      text: "text-green-700 dark:text-green-400",
+      dot: "bg-green-500",
+    },
+    yellow: {
+      bg: "bg-yellow-100 dark:bg-yellow-900",
+      text: "text-yellow-700 dark:text-yellow-400",
+      dot: "bg-yellow-500",
+    },
+    gray: {
+      bg: "bg-zinc-100 dark:bg-zinc-800",
+      text: "text-zinc-600 dark:text-zinc-400",
+      dot: "bg-zinc-400",
+    },
+  };
+
+  const badge = badgeColors[color];
 
   return (
     <div className="flex items-center justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
@@ -250,9 +398,17 @@ function ProviderCard({
         </div>
         <div>
           <p className="font-medium text-sm">{label}</p>
-          <p className="text-xs text-zinc-400">
-            {connected ? "Connected" : "Not connected"}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${badge.bg} ${badge.text}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+              {statusLabel}
+            </span>
+            {lastSyncStr && (
+              <span className="text-xs text-zinc-400">
+                Last synced: {lastSyncStr}
+              </span>
+            )}
+          </div>
         </div>
       </div>
       {connected ? (
@@ -294,6 +450,31 @@ function ConnectButton({ provider }: { provider: string }) {
     >
       Connect
     </button>
+  );
+}
+
+function ComingSoonCard({
+  Icon,
+  label,
+  description,
+}: {
+  Icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-5 opacity-60">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600">
+          <Icon className="w-5 h-5" />
+        </div>
+        <div>
+          <p className="font-medium text-sm text-zinc-500 dark:text-zinc-500">{label}</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">{description}</p>
+        </div>
+      </div>
+      <span className="text-xs text-zinc-400 dark:text-zinc-600 italic">Coming soon</span>
+    </div>
   );
 }
 
