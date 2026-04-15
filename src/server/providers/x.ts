@@ -372,19 +372,21 @@ export async function fetchXFollows(
         headers: { Authorization: `Bearer ${newToken}` },
       });
       if (!retryResp.ok) break;
-      const data = await retryResp.json();
-      processXEntities(data.data ?? [], allFollows);
-      url = data.meta?.next_token
-        ? `https://api.x.com/2/users/@me/following?user.fields=id,name,username,description&max_results=100&pagination_token=${data.meta.next_token}`
+      const data = await retryResp.json() as Record<string, unknown>;
+      processXEntities((data.data as Record<string, unknown>[] ?? []), allFollows);
+      const meta = data.meta as Record<string, unknown> | undefined;
+      url = meta?.next_token
+        ? `https://api.x.com/2/users/@me/following?user.fields=id,name,username,description&max_results=100&pagination_token=${meta.next_token}`
         : null;
       continue;
     }
 
     if (!resp.ok) break;
-    const data = await resp.json();
-    processXEntities(data.data ?? [], allFollows);
-    url = data.meta?.next_token
-      ? `https://api.x.com/2/users/@me/following?user.fields=id,name,username,description&max_results=100&pagination_token=${data.meta.next_token}`
+    const data = await resp.json() as Record<string, unknown>;
+    processXEntities((data.data as Record<string, unknown>[] ?? []), allFollows);
+    const meta = data.meta as Record<string, unknown> | undefined;
+    url = meta?.next_token
+      ? `https://api.x.com/2/users/@me/following?user.fields=id,name,username,description&max_results=100&pagination_token=${meta.next_token}`
       : null;
   }
 
@@ -438,19 +440,21 @@ export async function fetchXLikes(
         headers: { Authorization: `Bearer ${newToken}` },
       });
       if (!retryResp.ok) break;
-      const data = await retryResp.json();
-      extractTweets(data.data ?? [], allLikes);
-      url = data.meta?.next_token
-        ? `https://api.x.com/2/users/@me/liked_tweets?max_results=100&tweet.fields=text,created_at&pagination_token=${data.meta.next_token}`
+      const data = await retryResp.json() as Record<string, unknown>;
+      extractTweets((data.data as Record<string, unknown>[] ?? []), allLikes);
+      const meta = data.meta as Record<string, unknown> | undefined;
+      url = meta?.next_token
+        ? `https://api.x.com/2/users/@me/liked_tweets?max_results=100&tweet.fields=text,created_at&pagination_token=${meta.next_token}`
         : null;
       continue;
     }
 
     if (!resp.ok) break;
-    const data = await resp.json();
-    extractTweets(data.data ?? [], allLikes);
-    url = data.meta?.next_token
-      ? `https://api.x.com/2/users/@me/liked_tweets?max_results=100&tweet.fields=text,created_at&pagination_token=${data.meta.next_token}`
+    const data = await resp.json() as Record<string, unknown>;
+    extractTweets((data.data as Record<string, unknown>[] ?? []), allLikes);
+    const meta = data.meta as Record<string, unknown> | undefined;
+    url = meta?.next_token
+      ? `https://api.x.com/2/users/@me/liked_tweets?max_results=100&tweet.fields=text,created_at&pagination_token=${meta.next_token}`
       : null;
   }
 
@@ -480,19 +484,21 @@ export async function fetchXBookmarks(
         headers: { Authorization: `Bearer ${newToken}` },
       });
       if (!retryResp.ok) break;
-      const data = await retryResp.json();
-      extractTweets(data.data ?? [], allBookmarks);
-      url = data.meta?.next_token
-        ? `https://api.x.com/2/users/@me/bookmarks?max_results=100&tweet.fields=text,created_at&pagination_token=${data.meta.next_token}`
+      const data = await retryResp.json() as Record<string, unknown>;
+      extractTweets((data.data as Record<string, unknown>[] ?? []), allBookmarks);
+      const meta = data.meta as Record<string, unknown> | undefined;
+      url = meta?.next_token
+        ? `https://api.x.com/2/users/@me/bookmarks?max_results=100&tweet.fields=text,created_at&pagination_token=${meta.next_token}`
         : null;
       continue;
     }
 
     if (!resp.ok) break;
-    const data = await resp.json();
-    extractTweets(data.data ?? [], allBookmarks);
-    url = data.meta?.next_token
-      ? `https://api.x.com/2/users/@me/bookmarks?max_results=100&tweet.fields=text,created_at&pagination_token=${data.meta.next_token}`
+    const data = await resp.json() as Record<string, unknown>;
+    extractTweets((data.data as Record<string, unknown>[] ?? []), allBookmarks);
+    const meta = data.meta as Record<string, unknown> | undefined;
+    url = meta?.next_token
+      ? `https://api.x.com/2/users/@me/bookmarks?max_results=100&tweet.fields=text,created_at&pagination_token=${meta.next_token}`
       : null;
   }
 

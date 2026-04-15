@@ -8,3 +8,4 @@ export {
 } from "./brief-generator";
 export { syncXSignals } from "./sync-x-signals";
 export { syncGoogleSignals } from "./sync-google-signals";
+export { syncPrecomputeBriefs } from "./sync-precompute-briefs";

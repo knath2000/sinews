@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
+import { generateDailyBriefForUser } from "@/server/brief-engine";
 import { applyRateLimit } from "@/middleware/rate-limit";
 import type { NextRequest } from "next/server";
+import { db } from "@/server/db/client";
 
 /**
  * POST /api/briefs/refresh
- * Staff-only endpoint to manually trigger a brief refresh.
+ * Staff-only endpoint to delete today's brief and regenerate it.
  * Rate limited to 5 requests per 60 seconds per user.
  */
 export async function POST(request: NextRequest) {
@@ -29,9 +31,32 @@ export async function POST(request: NextRequest) {
   });
   if (rl) return rl;
 
-  return NextResponse.json({
-    status: "queued",
-    message: "Brief refresh has been queued",
-    user_id: dbUser.id,
-  });
+  try {
+    // Delete any existing brief for today (in UTC for simplicity)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await db.daily_briefs.deleteMany({
+      where: {
+        user_id: dbUser.id,
+        brief_date: {
+          gte: today,
+          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+
+    // Regenerate the brief
+    const result = await generateDailyBriefForUser(dbUser.id);
+
+    return NextResponse.json({
+      status: "generating",
+      brief_id: result.brief_id,
+    });
+  } catch (err) {
+    console.error("Brief refresh failed:", err);
+    return NextResponse.json(
+      { error: "Brief refresh failed" },
+      { status: 500 },
+    );
+  }
 }

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { db } from "./db/client";
 import { SIGNAL_WEIGHTS, TOPIC_TAXONOMY } from "./taxonomy";
+import { isFeatureEnabled } from "./feature-flags";
 
 const SUMMARY_MODEL =
   process.env.OPENAI_SUMMARY_MODEL || "gpt-4o-mini";
@@ -22,6 +23,7 @@ export interface ScoredCandidate {
   entities: string[];
   quality_score: number;
   dedupe_key: string;
+  cluster_id: string | null;
   /** Composite score 0-1 */
   score: number;
 }
@@ -41,7 +43,8 @@ export interface GeneratedBriefItem {
 
 /**
  * Calculate user interest signals weights for topics and entities.
- * Builds a weighted profile from interest_signals and user_topic_preferences.
+ * Builds a weighted profile from interest_signals, user_topic_preferences,
+ * and recent feedback_events (7-day rolling window).
  */
 export async function buildUserProfile(userId: string): Promise<{
   topicWeights: Map<string, number>;
@@ -102,12 +105,115 @@ export async function buildUserProfile(userId: string): Promise<{
     }
   }
 
+  // --- Feedback events integration (7-day rolling window) ---
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const feedbackRows = await db.$queryRaw<
+    Array<{ topic: string; event_type: string; count: bigint }>
+  >`
+    SELECT topic, event_type, count(*) 
+    FROM feedback_events 
+    WHERE user_id = ${userId}::uuid 
+      AND created_at > ${sevenDaysAgo} 
+      AND topic IS NOT NULL 
+    GROUP BY topic, event_type
+  `;
+
+  for (const row of feedbackRows) {
+    const count = Number(row.count);
+    const topic = row.topic;
+    const weight =
+      row.event_type === "thumbs_up"
+        ? count * SIGNAL_WEIGHTS.thumbs_up   // +0.8 per count
+        : count * SIGNAL_WEIGHTS.thumbs_down; // -1.0 per count
+    const existing = topicWeights.get(topic) ?? 0;
+    topicWeights.set(topic, existing + weight);
+  }
+
   return { topicWeights, entityWeights };
+}
+
+/**
+ * Fetch yesterday's brief topics for a given user.
+ * Used for novelty bonus calculation.
+ */
+export async function getYesterdayBriefTopics(userId: string): Promise<Set<string>> {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setHours(0, 0, 0, 0);
+
+  const brief = await db.daily_briefs.findFirst({
+    where: {
+      user_id: userId,
+      brief_date: {
+        gte: yesterday,
+        lt: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000),
+      },
+    },
+    include: {
+      daily_brief_items: {
+        include: {
+          article: {
+            select: {
+              article_annotations: {
+                select: {
+                  topics_json: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const topics = new Set<string>();
+  if (!brief) return topics;
+
+  for (const item of brief.daily_brief_items) {
+    const annot = item.article?.article_annotations;
+    if (annot?.topics_json) {
+      try {
+        const parsed = JSON.parse(annot.topics_json) as string[];
+        if (Array.isArray(parsed)) {
+          for (const t of parsed) {
+            if (typeof t === "string") topics.add(t);
+          }
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+
+  return topics;
+}
+
+/**
+ * Compute novelty bonus: +0.15 for topics with positive feedback
+ * that were NOT in yesterday's brief.
+ */
+export function computeNoveltyBonus(
+  candidate: { topics: string[] },
+  positiveTopics: Set<string>,
+  yesterdayBriefTopics: Set<string>
+): number {
+  for (const topic of candidate.topics) {
+    if (positiveTopics.has(topic) && !yesterdayBriefTopics.has(topic)) {
+      return 0.15;
+    }
+  }
+  return 0.0;
 }
 
 /**
  * Score candidate articles using the ranking formula.
  * score = 0.35 * topic_match + 0.20 * entity_match + 0.20 * recency + 0.15 * source_quality + 0.10 * diversity_adjustment
+ *
+ * Phase 1 diversity rules:
+ * - If source already has 2 items in running top 10, apply -0.15 to additional candidates
+ * - If candidate shares dedupe_key or cluster_id with already-selected item, apply -0.30 penalty
  */
 export function scoreCandidates(
   candidates: Array<{
@@ -119,13 +225,23 @@ export function scoreCandidates(
     entities: string[];
     quality_score: number;
     dedupe_key: string;
+    cluster_id: string | null;
   }>,
   topicWeights: Map<string, number>,
   entityWeights: Map<string, number>,
-  now: Date = new Date()
+  now: Date = new Date(),
+  yesterdayBriefTopics: Set<string> = new Set()
 ): ScoredCandidate[] {
   const maxTopicWeight = Math.max(1, ...Array.from(topicWeights.values()));
   const maxEntityWeight = Math.max(1, ...Array.from(entityWeights.values()));
+
+  // Identify topics with positive feedback for novelty bonus
+  const positiveTopics = new Set<string>();
+  topicWeights.forEach((weight, topic) => {
+    if (weight > 0) {
+      positiveTopics.add(topic);
+    }
+  });
 
   // Calculate raw scores
   const scored = candidates.map((c) => {
@@ -165,33 +281,49 @@ export function scoreCandidates(
     // Source quality: normalize quality_score 1-5 to 0-1
     const sourceQualityScore = (c.quality_score - 1) / 4;
 
+    // Novelty bonus
+    const noveltyBonus = computeNoveltyBonus(c, positiveTopics, yesterdayBriefTopics);
+
     return {
       ...c,
       topicScore,
       entityScore,
       recencyScore,
       sourceQualityScore,
+      noveltyBonus,
     };
   });
 
-  // Calculate diversity adjustment
-  // Penalize articles that share dedupe_key with higher-ranked candidates
-  const usedDedupeKeys = new Set<string>();
-  const usedSources = new Set<string>();
+  // Phase 1 diversity tracking
+  const selectedSourceCounts = new Map<string, number>();
+  const selectedDedupeKeys = new Set<string>();
+  const selectedClusterIds = new Set<string>();
 
-  // Sort by raw score first for diversity calculation
+  // Sort by raw topic score first for diversity calculation
   scored.sort((a, b) => b.topicScore - a.topicScore);
 
   const final = scored.map((s) => {
-    const diversityPenalty = usedDedupeKeys.has(s.dedupe_key)
-      ? -0.5
-      : 0;
-    const sourceBonus = usedSources.has(s.source_name) ? -0.1 : 0.05;
-    const diversityScore = Math.max(0, Math.min(1, 0.5 + diversityPenalty + sourceBonus));
+    // Source diversity penalty: if source already has 2 items in top 10
+    const sourceCount = selectedSourceCounts.get(s.source_name) ?? 0;
+    const sourceDiversityPenalty = sourceCount >= 2 ? -0.15 : 0;
 
-    if (diversityPenalty === 0) {
-      usedDedupeKeys.add(s.dedupe_key);
-      usedSources.add(s.source_name);
+    // Dedupe/cluster penalty: -0.30 if shares dedupe_key or cluster_id
+    const dedupePenalty =
+      selectedDedupeKeys.has(s.dedupe_key) ? -0.30 : 0;
+    const clusterPenalty =
+      s.cluster_id && selectedClusterIds.has(s.cluster_id) ? -0.30 : 0;
+    const dedupeClusterPenalty = dedupePenalty + clusterPenalty;
+
+    const diversityPenalty = sourceDiversityPenalty + dedupeClusterPenalty;
+    const diversityScore = Math.max(0, Math.min(1, 0.5 + diversityPenalty));
+
+    // Track selections
+    if (sourceDiversityPenalty === 0) {
+      selectedSourceCounts.set(s.source_name, sourceCount + 1);
+    }
+    selectedDedupeKeys.add(s.dedupe_key);
+    if (s.cluster_id) {
+      selectedClusterIds.add(s.cluster_id);
     }
 
     // Combined score with weights
@@ -200,7 +332,8 @@ export function scoreCandidates(
       0.20 * s.entityScore +
       0.20 * s.recencyScore +
       0.15 * s.sourceQualityScore +
-      0.10 * diversityScore;
+      0.10 * diversityScore +
+      s.noveltyBonus;
 
     return {
       article_id: s.article_id,
@@ -211,11 +344,61 @@ export function scoreCandidates(
       entities: s.entities,
       quality_score: s.quality_score,
       dedupe_key: s.dedupe_key,
+      cluster_id: s.cluster_id,
       score: Math.round(score * 1000) / 1000,
     };
   });
 
   return final.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Filter candidates by source quality floor.
+ * Uses isFeatureEnabled('enable_source_policy') to gate this check.
+ * Default: enabled=true, quality_floor=2 if no policy exists.
+ */
+export async function filterBySourcePolicy(
+  candidates: Array<{
+    article_id: number;
+    title: string;
+    source_name: string;
+    published_at: Date | null;
+    topics: string[];
+    entities: string[];
+    quality_score: number;
+    dedupe_key: string;
+    cluster_id: string | null;
+  }>
+): Promise<typeof candidates> {
+  const sourcePolicyEnabled = await isFeatureEnabled("enable_source_policy");
+  if (!sourcePolicyEnabled) {
+    return candidates;
+  }
+
+  // Fetch source policies for all candidate sources
+  const sourceNames = Array.from(new Set(candidates.map((c) => c.source_name)));
+  const policies = await db.source_policies.findMany({
+    where: {
+      source_name: {
+        in: sourceNames,
+      },
+    },
+  });
+
+  const policyMap = new Map<string, { enabled: boolean; quality_floor: number }>();
+  for (const p of policies) {
+    policyMap.set(p.source_name, {
+      enabled: p.enabled,
+      quality_floor: p.quality_floor,
+    });
+  }
+
+  return candidates.filter((c) => {
+    const policy = policyMap.get(c.source_name);
+    const enabled = policy?.enabled ?? true;
+    const qualityFloor = policy?.quality_floor ?? 2;
+    return enabled && c.quality_score >= qualityFloor;
+  });
 }
 
 /**
@@ -235,6 +418,7 @@ export async function getCandidates(
     entities: string[];
     quality_score: number;
     dedupe_key: string;
+    cluster_id: string | null;
   }>
 > {
   const annotated = await db.article_annotations.findMany({
@@ -251,6 +435,7 @@ export async function getCandidates(
           title: true,
           source_name: true,
           published_at: true,
+          cluster_id: true,
         },
       },
     },
@@ -266,6 +451,7 @@ export async function getCandidates(
     entities: a.entities_json ? JSON.parse(a.entities_json) : [],
     quality_score: a.quality_score ?? 3,
     dedupe_key: a.dedupe_key ?? "",
+    cluster_id: a.article.cluster_id,
   }));
 }
 
@@ -332,8 +518,11 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
 /**
  * Generate a full daily brief for a user.
  * Creates or updates the daily_briefs record with top 5 scored items.
+ * Cache: if a brief already exists for today with status='completed', return immediately.
  */
-export async function generateDailyBriefForUser(userId: string): Promise<{
+export async function generateDailyBriefForUser(
+  userId: string
+): Promise<{
   brief_id: number;
   items: number;
   duration_ms: number;
@@ -341,19 +530,17 @@ export async function generateDailyBriefForUser(userId: string): Promise<{
   const startTime = Date.now();
 
   // Determine the user's brief date (local timezone)
-  const timeZone =
-    (
-      await db.users.findUnique({
-        where: { id: userId },
-        select: { timezone: true },
-      })
-    )?.timezone ?? "America/Los_Angeles";
+  const userRecord = await db.users.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  const timeZone = userRecord?.timezone ?? "America/Los_Angeles";
 
   const now = new Date();
   const localDateStr = now.toLocaleDateString("en-CA", { timeZone });
   const briefDate = new Date(localDateStr);
 
-  // Check if brief already exists for today
+  // --- Cache check: if brief already exists for today and is completed, return immediately ---
   const existingBrief = await db.daily_briefs.findUnique({
     where: {
       user_id_brief_date: {
@@ -391,19 +578,26 @@ export async function generateDailyBriefForUser(userId: string): Promise<{
   });
 
   try {
-    // Build user profile
+    // Build user profile (includes feedback signals)
     const profile = await buildUserProfile(userId);
+
+    // Fetch yesterday's brief topics for novelty bonus
+    const yesterdayBriefTopics = await getYesterdayBriefTopics(userId);
 
     // Get candidates from last 48 hours
     const since = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-    const candidates = await getCandidates(since, 50);
+    let candidates = await getCandidates(since, 50);
 
-    // Score and rank
+    // Apply source quality floor filtering (gated by feature flag)
+    candidates = await filterBySourcePolicy(candidates);
+
+    // Score and rank (with novelty bonus and diversity penalty)
     const scored = scoreCandidates(
       candidates,
       profile.topicWeights,
       profile.entityWeights,
-      now
+      now,
+      yesterdayBriefTopics
     );
 
     // Dedupe by keeping only the first occurrence of each dedupe_key
@@ -507,6 +701,12 @@ export async function generateDailyBriefForUser(userId: string): Promise<{
           candidate_count: candidates.length,
         },
       });
+    });
+
+    // Update user_profiles last_active_at
+    await db.user_profiles.update({
+      where: { user_id: userId },
+      data: { last_active_at: new Date() },
     });
 
     return {

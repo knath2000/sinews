@@ -9,6 +9,7 @@ import {
   scheduleIngressAnnotations,
   syncXSignals,
   syncGoogleSignals,
+  syncPrecomputeBriefs,
 } from "@/server/inngest";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ const handler = serve({
     scheduleIngressAnnotations,
     syncXSignals,
     syncGoogleSignals,
+    syncPrecomputeBriefs,
   ],
 });
 
