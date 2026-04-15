@@ -29,6 +29,14 @@ export const MIN_TOPIC_SELECTIONS = 5;
  */
 export const CURRENT_CONSENT_VERSION = "v1.0";
 
+export const HISTORY_IMPORT_DOMAIN_WEIGHT_CAP = 0.5;
+
+export const HISTORY_IMPORT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+export const HISTORY_IMPORT_MAX_AGE_DAYS = 90;
+
+export const HISTORY_IMPORT_PREVIEW_TTL_HOURS = 24;
+
 export const TIMEZONES = [
   "Pacific/Auckland",
   "Australia/Sydney",

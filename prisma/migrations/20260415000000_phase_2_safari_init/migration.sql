@@ -1,0 +1,3 @@
+-- Baseline migration for Phase 0 + Phase 1 tables
+-- This file documents the full schema as of Phase 2 start
+-- No actual migration needed - tables already exist via db push

@@ -8,29 +8,30 @@ datasource db {
 }
 
 model users {
-  id        String   @id @default(dbgenerated()) @db.Uuid
-  email     String   @db.Text
-  timezone  String   @default("America/Los_Angeles") @db.Text
-  created_at DateTime  @default(now()) @db.Timestamptz
+  id         String   @id @default(dbgenerated()) @db.Uuid
+  email      String   @db.Text
+  timezone   String   @default("America/Los_Angeles") @db.Text
+  created_at DateTime @default(now()) @db.Timestamptz
 
-  user_profiles                  user_profiles?
-  linked_accounts                linked_accounts[]
-  user_topic_preferences         user_topic_preferences[]
-  interest_signals               interest_signals[]
-  daily_briefs                   daily_briefs[]
-  feedback_events                feedback_events[]
+  user_profiles          user_profiles?
+  linked_accounts        linked_accounts[]
+  user_topic_preferences user_topic_preferences[]
+  interest_signals       interest_signals[]
+  daily_briefs           daily_briefs[]
+  feedback_events        feedback_events[]
+  history_imports        history_imports[]
 
   @@map("users")
 }
 
 model user_profiles {
-  user_id                  String    @id @db.Uuid
-  display_name             String?   @db.Text
-  onboarding_complete      Boolean   @default(false)
-  brief_ready_hour_local   Int       @default(4)
-  consent_version_accepted String?   @db.Text
-  last_active_at           DateTime  @default(now()) @db.Timestamptz
-  is_admin                 Boolean   @default(false)
+  user_id                  String   @id @db.Uuid
+  display_name             String?  @db.Text
+  onboarding_complete      Boolean  @default(false)
+  brief_ready_hour_local   Int      @default(4)
+  consent_version_accepted String?  @db.Text
+  last_active_at           DateTime @default(now()) @db.Timestamptz
+  is_admin                 Boolean  @default(false)
 
   user users @relation(fields: [user_id], references: [id])
 
@@ -52,19 +53,19 @@ model user_topic_preferences {
 }
 
 model linked_accounts {
-  id                   Int       @id @default(autoincrement())
-  user_id              String    @db.Uuid
-  provider             String    @db.Text
-  status               String    @default("active") @db.Text
-  scopes_json          String?   @db.Text
+  id                      Int       @id @default(autoincrement())
+  user_id                 String    @db.Uuid
+  provider                String    @db.Text
+  status                  String    @default("active") @db.Text
+  scopes_json             String?   @db.Text
   access_token_encrypted  String?   @db.Text
   refresh_token_encrypted String?   @db.Text
-  expires_at           DateTime? @db.Timestamptz
-  last_sync_at         DateTime? @db.Timestamptz
-  sync_error_code      String?   @db.Text
-  sync_error_at        DateTime? @db.Timestamptz
-  sync_failure_count   Int       @default(0)
-  token_invalidated_at DateTime? @db.Timestamptz
+  expires_at              DateTime? @db.Timestamptz
+  last_sync_at            DateTime? @db.Timestamptz
+  sync_error_code         String?   @db.Text
+  sync_error_at           DateTime? @db.Timestamptz
+  sync_failure_count      Int       @default(0)
+  token_invalidated_at    DateTime? @db.Timestamptz
 
   user users @relation(fields: [user_id], references: [id])
 
@@ -72,19 +73,19 @@ model linked_accounts {
 }
 
 model interest_signals {
-  id                   Int       @id @default(autoincrement())
-  user_id              String    @db.Uuid
-  provider             String?   @db.Text
-  signal_type          String?   @db.Text
-  raw_value            String?   @db.Text
-  normalized_topic     String?   @db.Text
-  entity               String?   @db.Text
-  weight               Float     @default(1.0)
-  confidence           Float     @default(0.5)
-  observed_at          DateTime  @default(now()) @db.Timestamptz
-  expires_at           DateTime? @db.Timestamptz
-  source_reference     String?   @db.Text
-  signal_strength_bucket Int     @default(0)
+  id                     Int       @id @default(autoincrement())
+  user_id                String    @db.Uuid
+  provider               String?   @db.Text
+  signal_type            String?   @db.Text
+  raw_value              String?   @db.Text
+  normalized_topic       String?   @db.Text
+  entity                 String?   @db.Text
+  weight                 Float     @default(1.0)
+  confidence             Float     @default(0.5)
+  observed_at            DateTime  @default(now()) @db.Timestamptz
+  expires_at             DateTime? @db.Timestamptz
+  source_reference       String?   @db.Text
+  signal_strength_bucket Int       @default(0)
 
   user users @relation(fields: [user_id], references: [id])
 
@@ -92,22 +93,22 @@ model interest_signals {
 }
 
 model articles {
-  id                  Int       @id @default(autoincrement())
-  canonical_url       String    @unique @db.Text
-  source_name         String    @db.Text
-  title               String    @db.Text
-  snippet             String?   @db.Text
-  published_at        DateTime? @db.Timestamptz
-  language            String    @default("en") @db.Text
-  provider            String    @db.Text
-  license_class       String?   @db.Text
-  image_url           String?   @db.Text
-  cluster_id          String?   @db.Text
-  editorial_priority  Int       @default(3)
-  blocked_reason      String?   @db.Text
+  id                 Int       @id @default(autoincrement())
+  canonical_url      String    @unique @db.Text
+  source_name        String    @db.Text
+  title              String    @db.Text
+  snippet            String?   @db.Text
+  published_at       DateTime? @db.Timestamptz
+  language           String    @default("en") @db.Text
+  provider           String    @db.Text
+  license_class      String?   @db.Text
+  image_url          String?   @db.Text
+  cluster_id         String?   @db.Text
+  editorial_priority Int       @default(3)
+  blocked_reason     String?   @db.Text
 
-  article_annotations  article_annotations?
-  daily_brief_items    daily_brief_items[]
+  article_annotations article_annotations?
+  daily_brief_items   daily_brief_items[]
 
   @@map("articles")
 }
@@ -125,30 +126,30 @@ model article_annotations {
 }
 
 model daily_briefs {
-  id                      Int       @id @default(autoincrement())
-  user_id                 String    @db.Uuid
-  brief_date              DateTime  @db.Date
-  status                  String    @default("pending") @db.Text
-  generated_at            DateTime? @db.Timestamptz
-  generation_duration_ms  Int?
-  candidate_count         Int?
-  version_tag             String    @default("v0.1") @db.Text
+  id                     Int       @id @default(autoincrement())
+  user_id                String    @db.Uuid
+  brief_date             DateTime  @db.Date
+  status                 String    @default("pending") @db.Text
+  generated_at           DateTime? @db.Timestamptz
+  generation_duration_ms Int?
+  candidate_count        Int?
+  version_tag            String    @default("v0.1") @db.Text
 
-  user                   users @relation(fields: [user_id], references: [id])
-  daily_brief_items      daily_brief_items[]
+  user              users               @relation(fields: [user_id], references: [id])
+  daily_brief_items daily_brief_items[]
 
   @@unique([user_id, brief_date])
   @@map("daily_briefs")
 }
 
 model daily_brief_items {
-  id               Int     @id @default(autoincrement())
-  daily_brief_id   Int
-  article_id       Int?
-  rank             Int
-  score            Float
-  summary          String? @db.Text
-  why_recommended  String? @db.Text
+  id              Int     @id @default(autoincrement())
+  daily_brief_id  Int
+  article_id      Int?
+  rank            Int
+  score           Float
+  summary         String? @db.Text
+  why_recommended String? @db.Text
 
   daily_brief daily_briefs @relation(fields: [daily_brief_id], references: [id], onDelete: Cascade)
   article     articles?    @relation(fields: [article_id], references: [id])
@@ -159,45 +160,84 @@ model daily_brief_items {
 }
 
 model feedback_events {
-  id                  Int       @id @default(autoincrement())
-  user_id             String    @db.Uuid
+  id                  Int      @id @default(autoincrement())
+  user_id             String   @db.Uuid
   daily_brief_item_id Int
-  event_type          String    @db.Text
-  created_at          DateTime  @default(now()) @db.Timestamptz
+  event_type          String   @db.Text
+  created_at          DateTime @default(now()) @db.Timestamptz
   article_id          Int?
-  topic               String?   @db.Text
-  entity              String?   @db.Text
+  topic               String?  @db.Text
+  entity              String?  @db.Text
 
-  user            users @relation(fields: [user_id], references: [id])
-  daily_brief_item  daily_brief_items @relation(fields: [daily_brief_item_id], references: [id])
+  user             users             @relation(fields: [user_id], references: [id])
+  daily_brief_item daily_brief_items @relation(fields: [daily_brief_item_id], references: [id])
 
   @@map("feedback_events")
 }
 
 model job_runs {
-  id           Int       @id @default(autoincrement())
-  job_name     String    @db.Text
-  status       String    @db.Text
-  started_at   DateTime  @default(now()) @db.Timestamptz
-  finished_at  DateTime? @db.Timestamptz
-  error_text   String?   @db.Text
+  id          Int       @id @default(autoincrement())
+  job_name    String    @db.Text
+  status      String    @db.Text
+  started_at  DateTime  @default(now()) @db.Timestamptz
+  finished_at DateTime? @db.Timestamptz
+  error_text  String?   @db.Text
 
   @@map("job_runs")
 }
 
 model source_policies {
-  source_name    String   @id @db.Text
-  enabled        Boolean  @default(true)
-  license_class  String?  @db.Text
-  quality_floor  Int      @default(2)
+  source_name   String  @id @db.Text
+  enabled       Boolean @default(true)
+  license_class String? @db.Text
+  quality_floor Int     @default(2)
 
   @@map("source_policies")
 }
 
 model feature_flags {
-  flag_key     String  @id @db.Text
-  enabled      Boolean @default(false)
-  rules_json   String? @db.Text
+  flag_key   String  @id @db.Text
+  enabled    Boolean @default(false)
+  rules_json String? @db.Text
 
   @@map("feature_flags")
+}
+
+model history_imports {
+  id                  String    @id @default(cuid()) @db.Text
+  user_id             String    @db.Uuid
+  status              String    @db.Text
+  source_type         String    @db.Text
+  browser             String    @db.Text
+  raw_file_name       String?   @db.Text
+  schema_version      String?   @db.Text
+  visit_count         Int?
+  accepted_count      Int?
+  rejected_count      Int?
+  preview_json        String?   @db.Text
+  staged_signals_json String?   @db.Text
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  completed_at        DateTime? @db.Timestamptz
+  confirmed_at        DateTime? @db.Timestamptz
+  expires_at          DateTime? @db.Timestamptz
+
+  events history_import_events[]
+
+  user users @relation(fields: [user_id], references: [id])
+
+  @@map("history_imports")
+}
+
+model history_import_events {
+  id                Int      @id @default(autoincrement())
+  history_import_id String   @db.Text
+  level             String   @db.Text
+  code              String   @db.Text
+  message           String   @db.Text
+  created_at        DateTime @default(now()) @db.Timestamptz
+
+  history_import history_imports @relation(fields: [history_import_id], references: [id])
+
+  @@index([history_import_id])
+  @@map("history_import_events")
 }
