@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI News — Personalized AI News Briefs
+
+A Next.js application that automatically collects, categorizes, and ranks news articles, then delivers personalized daily briefing emails based on individual user interests and behaviors.
+
+## Tech Stack
+
+- **Framework:** Next.js (App Router)
+- **Language:** TypeScript
+- **Auth:** Supabase Auth
+- **Database:** PostgreSQL via Prisma ORM
+- **Background Jobs:** Inngest
+- **AI:** OpenAI API (GPT models for classification and summarization)
+- **Error Tracking:** Sentry
+- **Styling:** Tailwind CSS v4
+- **Deployment:** Vercel
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+
+- Node.js 20+ and npm
+- PostgreSQL database
+- Supabase project (for auth)
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure Environment Variables
+
+Copy the example env file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+### 4. Setup the Database
+
+```bash
+# Generate the Prisma client
+npx prisma generate
+
+# Push the schema to your database (or use `prisma migrate dev`)
+npx prisma db push
+```
+
+> **Note:** If `prisma db push` fails due to no database connection, ensure `DATABASE_URL` is set correctly in `.env`. You can use the generated client without a live DB for development.
+
+### 5. Run the Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+├── prisma/
+│   └── schema.prisma          # Database schema
+├── prisma.config.ts           # Prisma 7 configuration
+├── src/
+│   ├── app/                   # Next.js App Router pages & layouts
+│   ├── components/            # Reusable UI components
+│   └── server/
+│       ├── db/                # Database client & queries
+│       ├── jobs/              # Inngest job definitions
+│       ├── providers/         # External API integrations (OpenAI, Supabase, news sources)
+│       ├── ranking/           # Article ranking algorithms
+│       └── ai/                # AI classification & summarization logic
+├── .env.example               # Environment variable template
+└── README.md
+```
 
-## Learn More
+## Database
 
-To learn more about Next.js, take a look at the following resources:
+The application uses the following main tables:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **users** / **user_profiles** — User accounts and settings
+- **user_topic_preferences** — Topic weights for personalization
+- **linked_accounts** — OAuth-linked social accounts (X, Google)
+- **interest_signals** — Behavioral signals for interest inference
+- **articles** / **article_annotations** — Article catalog and AI-generated annotations
+- **daily_briefs** / **daily_brief_items** — Personalized daily briefing data
+- **feedback_events** — Like/dismiss signals for model feedback
+- **job_runs** — Background job execution tracking
+- **source_policies** — Source enable/disable and quality settings
+- **feature_flags** — Runtime feature toggles
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Available Scripts
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command            | Description                        |
+| ------------------ | ---------------------------------- |
+| `npm run dev`      | Start development server           |
+| `npm run build`    | Production build                   |
+| `npm run start`    | Start production server            |
+| `npm run lint`     | Run ESLint                         |
+| `npx prisma generate` | Generate Prisma client types    |
+| `npx prisma db push`  | Push schema to database         |
+| `npx prisma studio`   | Open Prisma Studio (DB GUI)     |
