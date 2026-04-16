@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { X as XIcon, Wifi, CircleUser, Building2 } from "lucide-react";
+import { X as XIcon, Wifi, CircleUser, Building2, Globe, Trash2 } from "lucide-react";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 
 interface LinkedAccountInfo {
@@ -25,6 +25,27 @@ export default function SettingsPage({
   const [savingTopic, setSavingTopic] = useState<string | null>(null);
   const [briefHour, setBriefHour] = useState(4);
   const [showAllTopics, setShowAllTopics] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Safari History Import state ---
+  const [safariImport, setSafariImport] = useState<{
+    id: string;
+    status: string;
+    preview_json: string | null;
+    confirmed_at: string | null;
+  } | null>(null);
+  const [safariPreview, setSafariPreview] = useState<{
+    topDomains: Array<{ domain: string; count: number }>;
+    topicCounts: Record<string, number>;
+    dateRange: { start: string; end: string };
+    totalVisits: number;
+    acceptedCount: number;
+    rejectedCount: number;
+    schemaVersion: number;
+  } | null>(null);
+  const [safariUploading, setSafariUploading] = useState(false);
+  const [safariProcessing, setSafariProcessing] = useState(false);
+  const [safariError, setSafariError] = useState<string | null>(null);
 
   // Resolve search params once on client
   useEffect(() => {
@@ -36,7 +57,7 @@ export default function SettingsPage({
     }
   }, [searchParams]);
 
-  // Load accounts + topics + brief hour on mount
+  // Load accounts + topics + brief hour + safari import on mount
   useEffect(() => {
     fetch("/api/settings/accounts")
       .then((r) => (r.ok ? r.json() : null))
@@ -63,6 +84,20 @@ export default function SettingsPage({
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (typeof data?.hour === "number") setBriefHour(data.hour);
+      })
+      .catch(() => {});
+
+    // Load Safari import status
+    fetch("/api/history-imports")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.import) {
+          const imp = data.import;
+          setSafariImport(imp);
+          if (imp.status === "preview_ready" && imp.preview_json) {
+            try { setSafariPreview(JSON.parse(imp.preview_json)); } catch { /* ignore */ }
+          }
+        }
       })
       .catch(() => {});
   }, []);
@@ -141,6 +176,95 @@ export default function SettingsPage({
     }
   }
 
+  // --- Safari History Import handlers ---
+  async function handleSafariUpload(file: File) {
+    setSafariError(null);
+    setSafariUploading(true);
+    try {
+      // Step 1: Create import record + get upload URL
+      const createRes = await fetch("/api/history-imports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name }),
+      });
+      if (!createRes.ok) {
+        const e = await createRes.json();
+        throw new Error(e.error || "Failed to create import");
+      }
+      const { importId, uploadUrl } = await createRes.json();
+
+      // Step 2: Upload ZIP directly to Supabase Storage
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": "application/zip" },
+      });
+      if (!uploadRes.ok) throw new Error("Upload to storage failed");
+
+      // Step 3: Process the ZIP server-side
+      setSafariUploading(false);
+      setSafariProcessing(true);
+      const processRes = await fetch(`/api/history-imports/${importId}/process`, {
+        method: "POST",
+      });
+      if (!processRes.ok) {
+        const e = await processRes.json();
+        throw new Error(e.error || "Processing failed");
+      }
+      const result = await processRes.json();
+      setSafariPreview(result.preview);
+
+      // Refresh import status
+      setSafariImport({
+        id: importId,
+        status: "preview_ready",
+        preview_json: null,
+        confirmed_at: null,
+      });
+    } catch (err: unknown) {
+      setSafariError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSafariUploading(false);
+      setSafariProcessing(false);
+    }
+  }
+
+  async function handleSafariConfirm() {
+    if (!safariImport?.id) return;
+    setSafariError(null);
+    try {
+      const res = await fetch(`/api/history-imports/${safariImport.id}/confirm`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.error || "Confirm failed");
+      }
+      setSafariImport((prev) => (prev ? { ...prev, status: "confirmed", confirmed_at: new Date().toISOString() } : null));
+      setSafariPreview(null);
+    } catch (err: unknown) {
+      setSafariError(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
+  async function handleSafariDelete() {
+    if (!safariImport?.id) return;
+    setSafariError(null);
+    try {
+      const res = await fetch(`/api/history-imports/${safariImport.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.error || "Delete failed");
+      }
+      setSafariImport(null);
+      setSafariPreview(null);
+    } catch (err: unknown) {
+      setSafariError(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Nav */}
@@ -178,6 +302,27 @@ export default function SettingsPage({
             Connection failed: {decodeURIComponent(errorParam)}
           </div>
         )}
+
+        {/* Safari History Import */}
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-4">Safari History Import</h2>
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              Strengthen your profile with Safari history. Safari ZIP only — passwords, cards, bookmarks ignored. Raw file deleted after processing.
+            </p>
+            <SafariImportSection
+              safariImport={safariImport}
+              safariPreview={safariPreview}
+              uploading={safariUploading}
+              processing={safariProcessing}
+              error={safariError}
+              onUpload={(file) => handleSafariUpload(file)}
+              onConfirm={handleSafariConfirm}
+              onDelete={handleSafariDelete}
+              onError={setSafariError}
+            />
+          </div>
+        </section>
 
         {/* Linked Accounts */}
         <section className="mb-8">
@@ -574,6 +719,215 @@ function DeleteAccountButton() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Safari Import UI Component ──────────────────────────────────────────────
+
+interface SafariPreviewData {
+  topDomains: Array<{ domain: string; count: number }>;
+  topicCounts: Record<string, number>;
+  dateRange: { start: string; end: string };
+  totalVisits: number;
+  acceptedCount: number;
+  rejectedCount: number;
+  schemaVersion: number;
+}
+
+function SafariImportSection({
+  safariImport,
+  safariPreview,
+  uploading,
+  processing,
+  error,
+  onUpload,
+  onConfirm,
+  onDelete,
+  onError,
+}: {
+  safariImport: {
+    id: string;
+    status: string;
+    preview_json: string | null;
+    confirmed_at: string | null;
+  } | null;
+  safariPreview: SafariPreviewData | null;
+  uploading: boolean;
+  processing: boolean;
+  error: string | null;
+  onUpload: (file: File) => void;
+  onConfirm: () => void;
+  onDelete: () => void;
+  onError: (msg: string) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".zip")) {
+      onError("Please upload a .zip file");
+      return;
+    }
+    onUpload(file);
+    e.target.value = "";
+  };
+
+  // Confirmed — showing management controls
+  if (safariImport?.status === "confirmed") {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="font-medium">History imported successfully</span>
+        </div>
+        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          Safari history signals are influencing your daily brief.
+        </p>
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 text-sm rounded-full bg-zinc-900 dark:bg-white dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
+          >
+            Replace Import
+          </button>
+          <button
+            onClick={onDelete}
+            className="px-4 py-2 text-sm rounded-full border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors flex items-center gap-1"
+          >
+            <Trash2 className="w-4 h-4" /> Delete History Signals
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".zip"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Preview ready — show aggregated summary
+  if (safariImport?.status === "preview_ready" && safariPreview) {
+    const preview = safariPreview;
+    const topTopics = Object.entries(preview.topicCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([topic, count]) => ({ topic, count }));
+
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-center">
+            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{preview.totalVisits.toLocaleString()}</div>
+            <div className="text-xs text-zinc-400">Total Visits</div>
+          </div>
+          <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-center">
+            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{preview.acceptedCount.toLocaleString()}</div>
+            <div className="text-xs text-zinc-400">Accepted</div>
+          </div>
+          <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-center">
+            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{preview.rejectedCount.toLocaleString()}</div>
+            <div className="text-xs text-zinc-400">Rejected</div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Top Domains</h3>
+          <div className="flex flex-wrap gap-2">
+            {preview.topDomains.slice(0, 10).map((d) => (
+              <span key={d.domain} className="text-xs px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                {d.domain} <span className="text-zinc-400">({d.count})</span>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {topTopics.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Inferred Topics</h3>
+            <div className="flex flex-wrap gap-2">
+              {topTopics.map((t) => {
+                const display = t.topic.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                return (
+                  <span key={t.topic} className="text-xs px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
+                    {display}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          Date range: {new Date(preview.dateRange.start).toLocaleDateString()} → {new Date(preview.dateRange.end).toLocaleDateString()}
+        </p>
+
+        {error && (<p className="text-sm text-red-600 dark:text-red-400">{error}</p>)}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            Confirm Import
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            Cancel / Re-upload
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".zip"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // No import yet — upload button
+  return (
+    <div className="space-y-4">
+      {uploading && (
+        <div className="flex items-center gap-3 text-sm text-zinc-500">
+          <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
+          <span>Uploading...</span>
+        </div>
+      )}
+      {processing && (
+        <div className="flex items-center gap-3 text-sm text-zinc-500">
+          <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
+          <span>Processing your Safari history...</span>
+        </div>
+      )}
+      {error && (<p className="text-sm text-red-600 dark:text-red-400">{error}</p>)}
+
+      {!uploading && !processing && (
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="px-4 py-2 text-sm rounded-full bg-zinc-900 dark:bg-white dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors flex items-center gap-2"
+        >
+          <Globe className="w-4 h-4" /> Upload Safari Export ZIP
+        </button>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".zip"
+        className="hidden"
+        onChange={handleFileChange}
+      />
     </div>
   );
 }

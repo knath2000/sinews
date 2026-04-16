@@ -29,7 +29,8 @@ Locked Phase 2 baseline approved by Kyle.
 - Normalized signals written to `interest_signals`
 
 ## API Contracts
-- `POST /api/history-imports/upload` — accepts ZIP, parses `History.json`, returns preview + temp import ID
+- `POST /api/history-imports` — creates the import record and returns a signed upload URL
+- Client uploads the ZIP directly to Supabase Storage, then calls `POST /api/history-imports/:id/process`
 - `POST /api/history-imports/:id/confirm` — commits normalized signals
 - `DELETE /api/history-imports/:id` — removes committed imported-history signals for that import
 - `GET /api/history-imports` — returns import history/status for settings

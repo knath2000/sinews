@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { db } from "./db/client";
 import { SIGNAL_WEIGHTS, TOPIC_TAXONOMY } from "./taxonomy";
 import { isFeatureEnabled } from "./feature-flags";
+import { HISTORY_IMPORT_DOMAIN_WEIGHT_CAP } from "@/lib/constants";
 
 const SUMMARY_MODEL =
   process.env.OPENAI_SUMMARY_MODEL || "gpt-4o-mini";
@@ -102,6 +103,24 @@ export async function buildUserProfile(userId: string): Promise<{
     if (signal.entity) {
       const existing = entityWeights.get(signal.entity) ?? 0;
       entityWeights.set(signal.entity, existing + base * multiplier);
+    }
+  }
+
+  // Cap Safari history import signals per domain-topic pair
+  const safariDomainWeights = new Map<string, Map<string, number>>();
+  for (const signal of signals) {
+    if (signal.signal_type !== "safari_history_import" || !signal.normalized_topic || !signal.raw_value) continue;
+    const domain = signal.raw_value;
+    const topic = signal.normalized_topic;
+    const weight = signal.weight;
+    if (!safariDomainWeights.has(domain)) safariDomainWeights.set(domain, new Map());
+    const domainMap = safariDomainWeights.get(domain)!;
+    domainMap.set(topic, (domainMap.get(topic) ?? 0) + weight);
+  }
+  for (const [, topicMap] of safariDomainWeights) {
+    for (const [topic, totalWeight] of topicMap) {
+      const capped = Math.min(totalWeight, HISTORY_IMPORT_DOMAIN_WEIGHT_CAP);
+      topicWeights.set(topic, (topicWeights.get(topic) ?? 0) - totalWeight + capped);
     }
   }
 
