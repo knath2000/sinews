@@ -254,6 +254,9 @@ export default function FeedPage() {
   const [acceptingConsent, setAcceptingConsent] = useState(false);
 
   useEffect(() => {
+    let pollCount = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
     async function load() {
       // Check consent first
       try {
@@ -270,23 +273,38 @@ export default function FeedPage() {
         // Continue without blocking on consent check error
       }
 
+      pollCount++;
+      const stillGenerating = pollCount < 15; // poll up to 15 times (~75s)
+
       try {
         const res = await fetch("/api/feed");
         if (res.ok) {
           const data = await res.json();
           setArticles(data.articles);
           setGeneratedAt(data.generatedAt);
+          setLoading(false);
+          return;
         } else if (res.status === 202) {
           setArticles(null);
           setGeneratedAt(null);
+          if (stillGenerating) {
+            timer = setTimeout(load, 5000);
+          } else {
+            setLoading(false);
+          }
+        } else {
+          setLoading(false);
         }
       } catch {
         console.error("Failed to fetch brief");
-      } finally {
         setLoading(false);
       }
     }
     load();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const handleAcceptConsent = async () => {
