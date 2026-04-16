@@ -1,5 +1,5 @@
-import { RawArticle } from "./article-loader";
-import { APPROVED_RSS_FEEDS } from "./article-loader";
+import { RawArticle, APPROVED_RSS_FEEDS } from "./article-loader";
+export type { RawArticle } from "./article-loader";
 
 function normalizeUrl(url: string): string {
   try {

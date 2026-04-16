@@ -3,6 +3,9 @@ import { db } from "./db/client";
 import { SIGNAL_WEIGHTS, TOPIC_TAXONOMY } from "./taxonomy";
 import { isFeatureEnabled } from "./feature-flags";
 import { HISTORY_IMPORT_DOMAIN_WEIGHT_CAP } from "@/lib/constants";
+import { fetchAllRSSFeeds } from "./news-fetcher";
+import type { RawArticle } from "./article-loader";
+import { classifyArticle } from "./article-classifier";
 
 const SUMMARY_MODEL =
   process.env.OPENAI_SUMMARY_MODEL || "gpt-4o-mini";
@@ -607,6 +610,12 @@ export async function generateDailyBriefForUser(
     const since = new Date(now.getTime() - 48 * 60 * 60 * 1000);
     let candidates = await getCandidates(since, 50);
 
+    // No annotated articles available — run a mini ingestion + annotation pipeline
+    if (candidates.length === 0) {
+      await seedArticlesForNewUser();
+      candidates = await getCandidates(since, 50);
+    }
+
     // Apply source quality floor filtering (gated by feature flag)
     candidates = await filterBySourcePolicy(candidates);
 
@@ -748,4 +757,83 @@ export async function generateDailyBriefForUser(
 
     throw err;
   }
+}
+
+/**
+ * Fetch articles from RSS feeds, dedupe, insert, and classify them with AI
+ * so they become candidates for brief generation. Only fetches what is
+ * needed: 50 articles max from RSS feeds (skipping TheNewsAPI since it
+ * requires a separate API key).
+ */
+async function seedArticlesForNewUser(): Promise<number> {
+  const rawArticles = await fetchAllRSSFeeds();
+  if (rawArticles.length === 0) {
+    console.warn("seedArticles: no articles returned from RSS feeds");
+    return 0;
+  }
+
+  // Limit to 50 fresh articles
+  const batch: RawArticle[] = rawArticles.slice(0, 50);
+
+  // Insert articles
+  const existingUrls = await db.articles.findMany({
+    where: { canonical_url: { in: batch.map((a) => a.canonical_url) } },
+    select: { canonical_url: true },
+  });
+  const existingUrlSet = new Set(existingUrls.map((e) => e.canonical_url));
+  const newArticles: RawArticle[] = batch.filter((a) => !existingUrlSet.has(a.canonical_url));
+
+  for (const a of newArticles) {
+    try {
+      const inserted = await db.articles.create({
+        data: {
+          canonical_url: a.canonical_url,
+          source_name: a.source,
+          title: a.title,
+          snippet: a.snippet,
+          published_at: a.published_at,
+          language: a.language ?? "en",
+          provider: a.provider,
+          license_class: a.license_class ?? "fair_use",
+          image_url: a.image_url,
+        },
+      });
+
+      // Annotate the article with AI classification
+      try {
+        const classification = await classifyArticle({
+          title: inserted.title,
+          source: inserted.source_name,
+          snippet: inserted.snippet,
+        });
+
+        await db.article_annotations.create({
+          data: {
+            article_id: inserted.id,
+            topics_json: JSON.stringify(classification.topics),
+            entities_json: JSON.stringify(classification.entities),
+            quality_score: classification.quality_score,
+            dedupe_key: classification.dedupe_key,
+          },
+        });
+      } catch {
+        console.warn(`Failed to classify article ${inserted.id}, using defaults`);
+        // Default annotation so the article is still a candidate
+        await db.article_annotations.create({
+          data: {
+            article_id: inserted.id,
+            topics_json: JSON.stringify([]),
+            entities_json: JSON.stringify([]),
+            quality_score: 3,
+            dedupe_key: `manual_${inserted.id}`,
+          },
+        });
+      }
+    } catch {
+      // Dedupe miss or insert conflict, skip
+    }
+  }
+
+  console.log(`seedArticles: inserted ${newArticles.length} articles, total RSS hits ${rawArticles.length}`);
+  return newArticles.length;
 }
