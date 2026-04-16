@@ -10,13 +10,14 @@ type Mode = "signin" | "signup";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { session, refreshSession } = useSupabase();
+  const { session } = useSupabase();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<Mode>("signin");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
 
   // Read initial mode from URL
   useEffect(() => {
@@ -26,7 +27,7 @@ function LoginContent() {
   }, [searchParams]);
 
   // Redirect if already logged in
-  if (session) {
+  if (session && !emailConfirmationRequired) {
     const redirect = searchParams.get("redirect") || "/feed";
     router.push(redirect);
   }
@@ -64,8 +65,13 @@ function LoginContent() {
           setError(data.error || "Authentication failed");
         } else {
           setMessage(data.message || "Success!");
-          // Refresh the browser-side session so SupabaseProvider picks it up
-          await refreshSession();
+          // If sign-up requires email confirmation, stay on the login page
+          if (data.message?.includes("check your email")) {
+            setEmailConfirmationRequired(true);
+            return;
+          }
+          // Otherwise, redirect after session is established
+          await new Promise((r) => setTimeout(r, 500));
           const redirect = searchParams.get("redirect") || "/feed";
           router.push(redirect);
         }
@@ -93,8 +99,25 @@ function LoginContent() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           {message && (
-            <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-4 text-sm text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
+            <div className={`rounded-lg p-4 text-sm border ${
+              emailConfirmationRequired
+                ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+                : "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
+            }`}>
               {message}
+              {emailConfirmationRequired && (
+                <p className="mt-2 text-sm">
+                  Once confirmed,{" "}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/feed")}
+                    className="underline font-medium"
+                  >
+                    go to your feed
+                  </button>
+                  .
+                </p>
+              )}
             </div>
           )}
 
@@ -104,84 +127,92 @@ function LoginContent() {
             </div>
           )}
 
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Email address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              placeholder="you@example.com"
-              disabled={isPending || !!message}
-            />
-          </div>
+          {!emailConfirmationRequired && (
+            <>
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  placeholder="you@example.com"
+                  disabled={isPending || !!message}
+                />
+              </div>
 
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              placeholder="At least 6 characters"
-              disabled={isPending || !!message}
-            />
-          </div>
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  placeholder="At least 6 characters"
+                  disabled={isPending || !!message}
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={isPending || !!message}
-            className="w-full flex justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isPending
-              ? (mode === "signin" ? "Signing in..." : "Creating account...")
-              : (message
-                  ? (mode === "signin" ? "Signed in" : "Account created")
-                  : (mode === "signin" ? "Sign in" : "Sign up"))}
-          </button>
+              <button
+                type="submit"
+                disabled={isPending || !!message}
+                className="w-full flex justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPending
+                  ? (mode === "signin" ? "Signing in..." : "Creating account...")
+                  : (message
+                      ? (mode === "signin" ? "Signed in" : "Account created")
+                      : (mode === "signin" ? "Sign in" : "Sign up"))}
+              </button>
+            </>
+          )}
         </form>
 
         {/* Toggle between sign-in and sign-up */}
-        <p className="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-500">
-          {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
-          <button
-            type="button"
-            onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); setError(""); }}
-            className="text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            {mode === "signin" ? "Sign up" : "Sign in"}
-          </button>
-        </p>
+        {!emailConfirmationRequired && (
+          <p className="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-500">
+            {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
+            <button
+              type="button"
+              onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); setError(""); }}
+              className="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {mode === "signin" ? "Sign up" : "Sign in"}
+            </button>
+          </p>
+        )}
 
-        <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
-          By creating an account, you agree to our{" "}
-          <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
-            Privacy Policy
-          </Link>{" "}
-          and{" "}
-          <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
-            Terms of Service
-          </Link>
-          .
-        </p>
+        {!emailConfirmationRequired && (
+          <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
+            By creating an account, you agree to our{" "}
+            <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
+              Privacy Policy
+            </Link>{" "}
+            and{" "}
+            <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
+              Terms of Service
+            </Link>
+            .
+          </p>
+        )}
       </div>
     </div>
   );
