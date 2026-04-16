@@ -448,6 +448,7 @@ export async function getCandidates(
       article: {
         published_at: { gte: since },
         blocked_reason: null,
+        provider: { not: "seed" },
       },
     },
     include: {
