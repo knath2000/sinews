@@ -54,11 +54,13 @@ export async function POST(req: Request) {
     },
   });
 
-  const uploadUrl = await getSignedUploadUrl(auth.dbUser.id, created.id);
+  const { signedUrl, token, path } = await getSignedUploadUrl(auth.dbUser.id, created.id);
 
   return NextResponse.json({
     importId: created.id,
-    uploadUrl,
+    signedUrl,
+    token,
+    path,
     maxBytes: HISTORY_IMPORT_MAX_UPLOAD_BYTES,
   });
 }

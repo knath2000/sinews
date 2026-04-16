@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X as XIcon, Wifi, CircleUser, Building2, Globe, Trash2 } from "lucide-react";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
+import { createClient } from "@/lib/supabase/client";
 
 interface LinkedAccountInfo {
   provider: string;
@@ -191,15 +192,16 @@ export default function SettingsPage({
         const e = await createRes.json();
         throw new Error(e.error || "Failed to create import");
       }
-      const { importId, uploadUrl } = await createRes.json();
+      const { importId, signedUrl, token, path } = await createRes.json();
+      const signedUrlToken = { signedUrl, token, path };
 
-      // Step 2: Upload ZIP directly to Supabase Storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": "application/zip" },
-      });
-      if (!uploadRes.ok) throw new Error("Upload to storage failed");
+      // Step 2: Upload ZIP using Supabase browser client with signed URL
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { error } = await supabase.storage
+        .from("history-imports-temp")
+        .uploadToSignedUrl(signedUrlToken.path, signedUrlToken.token, file);
+      if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
       // Step 3: Process the ZIP server-side
       setSafariUploading(false);

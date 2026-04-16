@@ -43,7 +43,7 @@ function storagePath(userId: string, importId: string): string {
   return `${userId}/${importId}.zip`;
 }
 
-export async function getSignedUploadUrl(userId: string, importId: string): Promise<string> {
+export async function getSignedUploadUrl(userId: string, importId: string): Promise<{ signedUrl: string; token: string; path: string }> {
   await ensureBucketExists();
   const supabase = getSupabaseAdminClient();
   const path = storagePath(userId, importId);
@@ -53,7 +53,11 @@ export async function getSignedUploadUrl(userId: string, importId: string): Prom
   if (error || !data?.signedUrl) {
     throw new Error(`Failed to create signed upload URL: ${error?.message ?? "unknown error"}`);
   }
-  return data.signedUrl;
+  return {
+    signedUrl: data.signedUrl,
+    token: data.token,
+    path,
+  };
 }
 
 export async function streamDownload(userId: string, importId: string): Promise<Readable> {

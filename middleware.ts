@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Protected routes: redirect to /login if no session
-  const protectedPaths = ["/onboarding", "/dashboard"];
+  const protectedPaths = ["/onboarding", "/dashboard", "/settings", "/feed"];
   const isProtected = protectedPaths.some(
     (p) => pathname === p || pathname.startsWith(p + "/")
   );
