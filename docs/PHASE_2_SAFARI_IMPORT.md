@@ -42,6 +42,22 @@ Locked Phase 2 baseline approved by Kyle.
 - Settings: re-import, delete signals, view status/summary
 
 ## Status
-Status: Approved Baseline
-Phase: 2
-Ready for Implementation: Phase 2 kickoff
+Status: **Accepted** ✅ — Implemented, Gated behind `enable_safari_history_import`
+Phase: 2 — Closed
+Signed off: 2026-04-15 by Kyle
+Commit: `8c65b5f` (main branch)
+
+### Project Status Summary (per Kyle's directive)
+- Phase 0: ✅ Accepted, Closed, Frozen
+- Phase 1 code: ✅ Accepted, Closed, Frozen
+- Phase 1 launch readiness: Pending operational verification
+- Phase 2 Safari import: ✅ Implemented, Accepted, Gated behind feature flag
+
+### Release Guidance
+Roll out in this order:
+1. Internal/staff-only under `enable_safari_history_import`
+2. Verify upload, preview, confirm, delete in production
+3. Verify storage cleanup and parser diagnostics on real Safari exports
+4. Then expand to a limited user cohort
+
+No further implementation changes are required for acceptance.
