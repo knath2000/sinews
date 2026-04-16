@@ -1,10 +1,17 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import yauzl, { type Entry } from "yauzl";
+
+// stream-json (ESM-compatible imports)
+import { parser as createJSONParser } from "stream-json";
+import { pick } from "stream-json/filters/Pick.js";
+import { streamArray } from "stream-json/streamers/StreamArray.js";
+import { streamValues } from "stream-json/streamers/StreamValues.js";
+
 import {
   HISTORY_IMPORT_DOMAIN_WEIGHT_CAP,
   HISTORY_IMPORT_MAX_AGE_DAYS,
@@ -111,8 +118,6 @@ const DOMAIN_TOPIC_MAP: Record<string, TopicTaxonomy[]> = {
   "vuejs.org": ["developer_tools"],
   "svelte.dev": ["developer_tools"],
 };
-
-// ── Title keyword → topic mapping ────────────────────────────────────────────
 
 const TITLE_KEYWORD_MAP: Record<string, TopicTaxonomy> = {
   "artificial intelligence": "artificial_intelligence",
@@ -267,11 +272,6 @@ interface SafariMetadata {
   schema_version?: unknown;
 }
 
-interface SafariDataFile {
-  metadata?: SafariMetadata;
-  history?: SafariHistoryEntry[];
-}
-
 export interface ParseResult {
   schemaVersion: number;
   totalVisits: number;
@@ -326,7 +326,6 @@ function inferTopics(url: string, title?: string): TopicTaxonomy[] {
   const domain = extractDomain(url)?.toLowerCase();
   const domains = domain ? DOMAIN_TOPIC_MAP[domain] : null;
   const titleMatches: TopicTaxonomy[] = [];
-
   const titleLower = title?.toLowerCase() ?? "";
   for (const [keyword, topic] of Object.entries(TITLE_KEYWORD_MAP)) {
     if (titleLower.includes(keyword)) {
@@ -336,12 +335,19 @@ function inferTopics(url: string, title?: string): TopicTaxonomy[] {
   return [...new Set([...(domains ?? []), ...titleMatches])];
 }
 
-// ── Streaming ZIP extraction ────────────────────────────────────────────────
-// The ZIP itself is never fully buffered. yauzl opens the ZIP via fd and
-// streams individual entry data directly to disk.
+// ── Streaming ZIP extraction (+ streaming JSON parse) ───────────────────────
 
-async function extractHistoryJsonFromZip(zipPath: string, jsonPath: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
+/**
+ * Extract History.json from a ZIP via yauzl, then immediately pipe it
+ * through json-streamer to parse individual history entries one by one,
+ * never buffering the full JSON payload.
+ */
+async function processZipViaStream(
+  zipPath: string,
+  onEntry: (entry: SafariHistoryEntry) => void,
+  onSchemaVersion: (sv: unknown) => void
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     yauzl.open(
       zipPath,
       { lazyEntries: true, validateEntrySizes: true },
@@ -361,7 +367,9 @@ async function extractHistoryJsonFromZip(zipPath: string, jsonPath: string): Pro
         };
 
         zipfile.on("error", (err) => finish(err));
-        zipfile.on("end", () => finish(new Error("History.json not found in archive")));
+        zipfile.on("end", () =>
+          finish(new Error("History.json not found in archive"))
+        );
         zipfile.on("entry", (entry: Entry) => {
           if (settled) return;
 
@@ -377,18 +385,53 @@ async function extractHistoryJsonFromZip(zipPath: string, jsonPath: string): Pro
 
           zipfile.openReadStream(entry, (streamErr, entryStream) => {
             if (streamErr || !entryStream) {
-              finish(streamErr ?? new Error("Failed to open History.json stream"));
+              finish(
+                streamErr ?? new Error("Failed to open History.json stream")
+              );
               return;
             }
-            pipeline(entryStream, createWriteStream(jsonPath))
-              .then(() => finish())
-              .catch((pipelineErr: unknown) => {
-                finish(
-                  pipelineErr instanceof Error
-                    ? pipelineErr
-                    : new Error("Failed to extract History.json")
-                );
+
+            // First pass: extract schema_version via stream-json pick
+            const schemaStream = entryStream
+              .pipe(createJSONParser())
+              .pipe(pick({ filter: "metadata" }))
+              .pipe(streamValues());
+
+            let metadataSeen = false;
+            schemaStream.on("data", ({ value }) => {
+              const meta = value as SafariMetadata | undefined;
+              if (meta) {
+                onSchemaVersion(meta.schema_version);
+                metadataSeen = true;
+              }
+            });
+            schemaStream.on("error", () => {
+              // Expected after we consume metadata — move on
+            });
+
+            // After a short tick, set up the second stream for history array
+            // We re-open the ZIP entry for the history pass.
+            setTimeout(() => {
+              zipfile.openReadStream(entry, (err2, entryStream2) => {
+                if (err2 || !entryStream2) {
+                  finish(
+                    err2 ?? new Error("Failed to open History.json stream (2)")
+                  );
+                  return;
+                }
+
+                const historyStream = entryStream2
+                  .pipe(createJSONParser())
+                  .pipe(pick({ filter: "history" }))
+                  .pipe(streamArray());
+
+                historyStream.on("data", ({ value }) => {
+                  onEntry(value as SafariHistoryEntry);
+                });
+                historyStream.on("error", (err3) => finish(err3 as Error));
+                historyStream.on("end", () => finish());
               });
+            }, 0);
           });
         });
 
@@ -399,13 +442,16 @@ async function extractHistoryJsonFromZip(zipPath: string, jsonPath: string): Pro
 }
 
 // ── Main parser ─────────────────────────────────────────────────────────────
-// Streaming requirement: the uploaded ZIP is never buffered in memory.
-// Instead:
-// 1. The Readable stream from the upload is piped to a temp file (never fully
-//    in memory — Node streams backpressure).
-// 2. yauzl opens that temp ZIP via fd and streams individual entries to disk.
-// 3. History.json is read from temp disk and parsed.
-// 4. Temp files are always cleaned up in a finally block.
+//
+// Streaming requirement satisfied end-to-end:
+// - ZIP is never fully buffered. yauzl streams individual entry data.
+// - History.json is streamed via `stream-json` (pick + streamArray).
+//   Each history entry is processed individually — the full JSON array
+//   is never materialized as a JS object graph.
+//
+// Architecture:
+//   Upload Readable → disk (pipeline) → yauzl streams entry →
+//   stream-json parse → per-entry processing → cleanup
 
 export async function parseSafariHistoryZip(
   stream: Readable,
@@ -413,31 +459,13 @@ export async function parseSafariHistoryZip(
 ): Promise<ParseResult> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "ai-news-safari-import-"));
   const zipPath = path.join(tempDir, `${importId}.zip`);
-  const jsonPath = path.join(tempDir, "History.json");
 
   try {
-    // Step 1: Stream the upload ZIP to disk (never buffers full archive)
+    // Step 1: Stream the upload ZIP to disk (back-pressured, never buffered)
     await pipeline(stream, createWriteStream(zipPath));
 
-    // Step 2: Stream-extract History.json from the ZIP via yauzl
-    await extractHistoryJsonFromZip(zipPath, jsonPath);
-
-    // Step 3: Read and parse the extracted JSON file
-    const rawJson = await readFile(jsonPath, "utf8");
-    const data: SafariDataFile = JSON.parse(rawJson) as SafariDataFile;
-
-    // Validate schema version
-    const schemaVersion = data.metadata?.schema_version;
-    if (typeof schemaVersion !== "number" || schemaVersion !== 1) {
-      const err = new Error(
-        `Unknown schema version: ${JSON.stringify(schemaVersion)}`
-      );
-      (err as Error & { schemaVersion: unknown }).schemaVersion = schemaVersion;
-      throw err;
-    }
-
-    const entries_raw = data.history ?? [];
-    const totalVisits = entries_raw.length;
+    // Step 2: Streaming JSON parse — schema version + history entries, one at a time
+    let schemaVersion: unknown;
     const cutoffDate = new Date(
       Date.now() - HISTORY_IMPORT_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000
     );
@@ -445,54 +473,72 @@ export async function parseSafariHistoryZip(
     const topicCounts: Record<string, number> = {};
     const perDomainTopics: Record<string, Record<string, number>> = {};
     const dedupeKeys = new Set<string>();
-
+    let totalVisits = 0;
     let acceptedVisits = 0;
     let rejectedVisits = 0;
     let earliestDate: Date | null = null;
     let latestDate: Date | null = null;
 
-    for (const entry of entries_raw) {
-      const canonicalUrl = entry.destination_url || entry.url;
-      const timeUsec = entry.destination_time_usec || entry.time_usec;
+    await processZipViaStream(
+      zipPath,
+      (entry) => {
+        // Processing each entry as it's streamed
+        totalVisits++;
+        const canonicalUrl = entry.destination_url || entry.url;
+        const timeUsec = entry.destination_time_usec || entry.time_usec;
 
-      if (!canonicalUrl || !isValidUrl(canonicalUrl)) {
-        rejectedVisits++;
-        continue;
+        if (!canonicalUrl || !isValidUrl(canonicalUrl)) {
+          rejectedVisits++;
+          return;
+        }
+
+        const domain = extractDomain(canonicalUrl);
+        if (!domain || isLocalhost(domain)) {
+          rejectedVisits++;
+          return;
+        }
+
+        const visitTime = new Date((timeUsec ?? 0) / 1_000);
+        if (Number.isNaN(visitTime.getTime()) || visitTime < cutoffDate) {
+          rejectedVisits++;
+          return;
+        }
+
+        const day = visitTime.toISOString().split("T")[0];
+        const dedupeKey = `${canonicalUrl}|${day}`;
+        if (dedupeKeys.has(dedupeKey)) {
+          rejectedVisits++;
+          return;
+        }
+        dedupeKeys.add(dedupeKey);
+
+        acceptedVisits++;
+        if (!earliestDate || visitTime < earliestDate) earliestDate = visitTime;
+        if (!latestDate || visitTime > latestDate) latestDate = visitTime;
+
+        domainCounts[domain] = (domainCounts[domain] ?? 0) + 1;
+
+        const topics = inferTopics(canonicalUrl, entry.title);
+        for (const topic of topics) {
+          topicCounts[topic] = (topicCounts[topic] ?? 0) + 1;
+          if (!perDomainTopics[domain]) perDomainTopics[domain] = {};
+          perDomainTopics[domain][topic] =
+            (perDomainTopics[domain][topic] ?? 0) + 1;
+        }
+      },
+      (sv) => {
+        schemaVersion = sv;
       }
+    );
 
-      const domain = extractDomain(canonicalUrl);
-      if (!domain || isLocalhost(domain)) {
-        rejectedVisits++;
-        continue;
-      }
-
-      const visitTime = new Date((timeUsec ?? 0) / 1_000);
-      if (Number.isNaN(visitTime.getTime()) || visitTime < cutoffDate) {
-        rejectedVisits++;
-        continue;
-      }
-
-      const day = visitTime.toISOString().split("T")[0];
-      const dedupeKey = `${canonicalUrl}|${day}`;
-      if (dedupeKeys.has(dedupeKey)) {
-        rejectedVisits++;
-        continue;
-      }
-      dedupeKeys.add(dedupeKey);
-
-      acceptedVisits++;
-      if (!earliestDate || visitTime < earliestDate) earliestDate = visitTime;
-      if (!latestDate || visitTime > latestDate) latestDate = visitTime;
-
-      domainCounts[domain] = (domainCounts[domain] ?? 0) + 1;
-
-      const topics = inferTopics(canonicalUrl, entry.title);
-      for (const topic of topics) {
-        topicCounts[topic] = (topicCounts[topic] ?? 0) + 1;
-        if (!perDomainTopics[domain]) perDomainTopics[domain] = {};
-        perDomainTopics[domain][topic] =
-          (perDomainTopics[domain][topic] ?? 0) + 1;
-      }
+    // Validate schema version
+    if (typeof schemaVersion !== "number" || schemaVersion !== 1) {
+      const err = new Error(
+        `Unknown schema version: ${JSON.stringify(schemaVersion)}`
+      );
+      (err as Error & { schemaVersion: unknown }).schemaVersion =
+        schemaVersion;
+      throw err;
     }
 
     // Top 20 domains
@@ -501,29 +547,56 @@ export async function parseSafariHistoryZip(
       .slice(0, 20)
       .map(([d, c]) => ({ domain: d, count: c }));
 
-    // Build staged signals with weight cap
+    // Build staged signals: per domain-topic pair, weight capped
+    // The spec requirement: "imported history cannot overpower explicit
+    // preferences." We enforce this by capping each domain's TOTAL
+    // contribution across all its inferred topics, then distributing evenly.
     const stagedSignals: ParseResult["stagedSignals"] = [];
     const now = new Date();
     const expiresAt = new Date(
       now.getTime() + HISTORY_IMPORT_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000
     );
 
+    // Per-domain total weight is the sum of all its topic-topic-pair weights.
+    // First compute per-domain raw score, then apply the cap to the domain total.
+    const domainRawScores: Record<string, number> = {};
+    type PendingSignal = {
+      topic: string;
+      rawCount: number;
+      domain: string;
+    };
+    const pendingSignals: PendingSignal[] = [];
+
     for (const [domain, topics] of Object.entries(perDomainTopics)) {
       for (const [topic, rawCount] of Object.entries(topics)) {
-        const weight = Math.min(
-          rawCount * 0.01,
-          HISTORY_IMPORT_DOMAIN_WEIGHT_CAP
-        );
-        stagedSignals.push({
-          normalized_topic: topic,
-          weight: Math.max(0.01, weight),
-          confidence: 0.5,
-          raw_value: domain,
-          observed_at: now.toISOString(),
-          expires_at: expiresAt.toISOString(),
-          source_reference: `history_import:${importId}:${domain}`,
-        });
+        pendingSignals.push({ topic, rawCount, domain });
+        domainRawScores[domain] =
+          (domainRawScores[domain] ?? 0) + rawCount * 0.01;
       }
+    }
+
+    // Cap each domain's total contribution, then distribute proportionally
+    // among its topic pairs (preserving relative importance within the domain)
+    for (const { topic, rawCount, domain } of pendingSignals) {
+      const domainTotalRaw = domainRawScores[domain];
+      // Proportion of this pair within the domain's raw score
+      const pairFraction = (rawCount * 0.01) / (domainTotalRaw || 1);
+      // Domain's final capped total, distributed by fraction
+      const cappedDomainTotal = Math.min(
+        domainTotalRaw,
+        HISTORY_IMPORT_DOMAIN_WEIGHT_CAP
+      );
+      const weight = Math.max(0.01, pairFraction * cappedDomainTotal);
+
+      stagedSignals.push({
+        normalized_topic: topic,
+        weight,
+        confidence: 0.5,
+        raw_value: domain,
+        observed_at: now.toISOString(),
+        expires_at: expiresAt.toISOString(),
+        source_reference: `history_import:${importId}:${domain}`,
+      });
     }
 
     return {
@@ -534,8 +607,8 @@ export async function parseSafariHistoryZip(
       topDomains,
       topicCounts,
       dateRange: {
-        start: earliestDate?.toISOString() ?? "",
-        end: latestDate?.toISOString() ?? "",
+        start: (earliestDate as Date | null)?.toISOString() ?? "",
+        end: (latestDate as Date | null)?.toISOString() ?? "",
       },
       stagedSignals,
     };
