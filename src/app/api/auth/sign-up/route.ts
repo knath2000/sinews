@@ -1,9 +1,13 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@/types/supabase";
 
 /**
  * POST /api/auth/sign-up
  * Create a new account with email/password and sign the user in immediately.
+ *
+ * Uses an explicit NextResponse so Supabase SSR cookie handlers can write
+ * the session cookies to the outgoing HTTP response.
  */
 export async function POST(request: Request) {
   try {
@@ -23,9 +27,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createClient();
+    // Create a response object first so we can pass cookies through it
+    const response = NextResponse.next();
+    const req = request as NextRequest;
 
-    // Sign up the user
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return req.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
@@ -49,7 +71,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // We have a session — cookie is already set by supabase/ssr
+    // We have a session — write cookies to response
     // Create user record in our DB if needed
     if (signUpData.user) {
       try {
@@ -60,10 +82,18 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    // Return JSON with the session cookies from the response object
+    const jsonRes = NextResponse.json({
       success: true,
       message: "Account created and signed in.",
     });
+    // Copy set-cookie headers from response to jsonRes
+    response.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "set-cookie") {
+        jsonRes.headers.append(key, value);
+      }
+    });
+    return jsonRes;
   } catch (err) {
     console.error("Sign-up error:", err);
     return NextResponse.json(
