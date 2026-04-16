@@ -68,7 +68,7 @@ export default function OnboardingPage() {
           setSuccess(true);
           // Redirect to dashboard after a short delay
           setTimeout(() => {
-            router.push("/dashboard");
+            router.push("/feed");
           }, 1500);
         }
       } catch {

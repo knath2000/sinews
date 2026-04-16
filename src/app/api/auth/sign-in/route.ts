@@ -3,11 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/auth/sign-in
- * Send a magic link to the provided email address.
+ * Authenticate with email/password and establish a server session.
+ * Supabase SSR cookies are written via createClient() so subsequent
+ * API requests (settings, feed) resolve the user.
  */
 export async function POST(request: Request) {
   try {
-    const { email, redirectTo } = await request.json();
+    const { email, password } = await request.json();
 
     if (!email || typeof email !== "string") {
       return NextResponse.json(
@@ -16,28 +18,45 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createClient();
-    const origin = process.env.APP_BASE_URL || "http://localhost:3000";
-    const next = redirectTo || "/onboarding";
-    const emailRedirectTo = `${origin}/auth/confirm?next=${encodeURIComponent(next)}`;
+    if (!password || typeof password !== "string") {
+      return NextResponse.json(
+        { error: "Password is required" },
+        { status: 400 }
+      );
+    }
 
-    const { error } = await supabase.auth.signInWithOtp({
+    const supabase = await createClient();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
-      options: {
-        emailRedirectTo,
-      },
+      password,
     });
 
     if (error) {
       return NextResponse.json(
         { error: error.message },
-        { status: 400 }
+        { status: 401 }
       );
+    }
+
+    if (!data.session) {
+      return NextResponse.json(
+        { error: "No session created" },
+        { status: 500 }
+      );
+    }
+
+    // Ensure DB user exists
+    try {
+      const { ensureUser } = await import("@/lib/auth");
+      await ensureUser(data.session.user.id, email);
+    } catch {
+      // best-effort
     }
 
     return NextResponse.json({
       success: true,
-      message: "Magic link sent. Check your email.",
+      message: "Signed in successfully.",
     });
   } catch (error) {
     console.error("Sign-in error:", error);

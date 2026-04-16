@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { X as XIcon, Wifi, CircleUser, Building2, Globe, Trash2 } from "lucide-react";
+import { X as XIcon, Wifi, CircleUser, Building2, Globe, Trash2, LogOut } from "lucide-react";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 import { createClient } from "@/lib/supabase/client";
 
@@ -21,12 +21,12 @@ export default function SettingsPage({
 }) {
   const [connectedParam, setConnectedParam] = useState<string | undefined>();
   const [errorParam, setErrorParam] = useState<string | undefined>();
+  const [connectError, setConnectError] = useState<string | null>(null);
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccountInfo[]>([]);
   const [topics, setTopics] = useState<Set<string>>(new Set());
   const [savingTopic, setSavingTopic] = useState<string | null>(null);
   const [briefHour, setBriefHour] = useState(4);
   const [showAllTopics, setShowAllTopics] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Safari History Import state ---
   const [safariImport, setSafariImport] = useState<{
@@ -285,6 +285,26 @@ export default function SettingsPage({
             >
               Feed
             </Link>
+            <button
+              onClick={async () => {
+                try {
+                  // Clear client-side session first
+                  const browserClient = createClient();
+                  await browserClient.auth.signOut();
+                } catch {
+                  // ignore — proceed with server sign-out anyway
+                }
+                try {
+                  await fetch("/api/auth/sign-out", { method: "POST" });
+                } catch {
+                  // ignore
+                }
+                window.location.href = "/login";
+              }}
+              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 inline-flex items-center gap-1"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Sign out
+            </button>
           </div>
         </nav>
       </header>
@@ -305,6 +325,17 @@ export default function SettingsPage({
         {errorParam && (
           <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-200">
             Connection failed: {decodeURIComponent(errorParam)}
+          </div>
+        )}
+        {connectError && (
+          <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-200">
+            {connectError}
+            <button
+              onClick={() => setConnectError(null)}
+              className="ml-2 underline"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -333,35 +364,15 @@ export default function SettingsPage({
         <section className="mb-8">
           <h2 className="text-lg font-semibold mb-4">Linked Accounts</h2>
           <div className="space-y-3">
-            <ProviderCard
-              provider="x"
+            <ComingSoonCard
+              Icon={XIcon}
               label="X / Twitter"
-              connected={isConnected("x")}
-              account={linkedAccounts.find((a) => a.provider === "x")}
-              onDisconnected={() =>
-                setLinkedAccounts((prev) =>
-                  prev.map((a) =>
-                    a.provider === "x" ? { ...a, status: "disconnected" } : a
-                  )
-                )
-              }
-              getStatus={getAccountStatus}
-              formatLastSync={formatLastSync}
+              description="Temporarily disabled during auth refinement"
             />
-            <ProviderCard
-              provider="google"
+            <ComingSoonCard
+              Icon={Wifi}
               label="Google"
-              connected={isConnected("google")}
-              account={linkedAccounts.find((a) => a.provider === "google")}
-              onDisconnected={() =>
-                setLinkedAccounts((prev) =>
-                  prev.map((a) =>
-                    a.provider === "google" ? { ...a, status: "disconnected" } : a
-                  )
-                )
-              }
-              getStatus={getAccountStatus}
-              formatLastSync={formatLastSync}
+              description="Temporarily disabled during auth refinement"
             />
             <ComingSoonCard
               Icon={CircleUser}
@@ -501,6 +512,7 @@ function ProviderCard({
   onDisconnected,
   getStatus,
   formatLastSync,
+  onConnectError,
 }: {
   provider: string;
   label: string;
@@ -509,7 +521,9 @@ function ProviderCard({
   onDisconnected: () => void;
   getStatus: (acc: LinkedAccountInfo | undefined) => { label: string; color: "green" | "yellow" | "gray" };
   formatLastSync: (at: string | null) => string | null;
+  onConnectError?: (msg: string) => void;
 }) {
+  const [connectError, setConnectError] = useState<string | null>(null);
   const IconComponent = provider === "x" ? XIcon : Wifi;
   const { label: statusLabel, color } = getStatus(account);
   const lastSyncStr = formatLastSync(account?.last_sync_at ?? null);
@@ -576,29 +590,62 @@ function ProviderCard({
           Disconnect
         </button>
       ) : (
-        <ConnectButton provider={provider} />
+        <div>
+          <ConnectButton
+            provider={provider}
+            onError={(msg) => {
+              setConnectError(msg);
+              onConnectError?.(msg);
+            }}
+          />
+          {connectError && (
+            <p className="mt-2 text-xs text-red-500 dark:text-red-400">{connectError}</p>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function ConnectButton({ provider }: { provider: string }) {
+function ConnectButton({
+  provider,
+  onError,
+}: {
+  provider: string;
+  onError?: (msg: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+
   return (
     <button
+      disabled={loading}
       onClick={async () => {
-        const res = await fetch(`/api/accounts/${provider}/start`, {
-          method: "POST",
-        });
-        if (res.ok) {
+        setLoading(true);
+        try {
+          const res = await fetch(`/api/accounts/${provider}/start`, {
+            method: "POST",
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            const msg = data?.error ?? `Server returned ${res.status}`;
+            onError?.(msg);
+            return;
+          }
           const data = await res.json();
           if (data.authUrl) {
             window.location.href = data.authUrl;
+          } else {
+            onError?.("No auth URL returned");
           }
+        } catch {
+          onError?.("Network error");
+        } finally {
+          setLoading(false);
         }
       }}
-      className="px-4 py-2 text-sm rounded-full bg-zinc-900 dark:bg-white dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
+      className="px-4 py-2 text-sm rounded-full bg-zinc-900 dark:bg-white dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      Connect
+      {loading ? "Connecting…" : "Connect"}
     </button>
   );
 }

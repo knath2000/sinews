@@ -45,7 +45,8 @@ export async function middleware(request: NextRequest) {
 
   // If logged in and visiting /login, redirect based on onboarding state
   if (pathname === "/login" && session) {
-    return NextResponse.redirect(new URL("/onboarding", request.url));
+    // Redirect logged-in users who visit /login to the main feed
+    return NextResponse.redirect(new URL("/feed", request.url));
   }
 
   return supabaseResponse;

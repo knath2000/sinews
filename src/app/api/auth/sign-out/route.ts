@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * GET /api/auth/sign-out
- * Sign out the current user.
+ * POST /api/auth/sign-out
+ * Sign out the current user. Uses the SSR server client so cookies are
+ * properly invalidated on the server side in addition to client-side clearing.
  */
-export async function GET() {
+export async function POST() {
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signOut();

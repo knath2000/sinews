@@ -12,7 +12,7 @@ export const FLAG_KEYS = {
   enable_source_policy: true,
   enable_demo_mode: true,
   enable_delete_account: true,
-  enable_safari_history_import: false,
+  enable_safari_history_import: true,
 } as const;
 
 export type FlagKey = keyof typeof FLAG_KEYS;

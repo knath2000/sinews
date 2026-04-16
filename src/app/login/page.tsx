@@ -5,11 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSupabase } from "@/lib/supabase-provider";
 
+type Mode = "signin" | "signup";
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session } = useSupabase();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<Mode>("signin");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -30,25 +34,34 @@ function LoginContent() {
       return;
     }
 
-    const redirect = searchParams.get("redirect");
-    const payload = redirect
-      ? { email, redirectTo: redirect }
-      : { email };
+    if (!password || password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    const endpoint = mode === "signup"
+      ? "/api/auth/sign-up"
+      : "/api/auth/sign-in";
 
     startTransition(async () => {
       try {
-        const res = await fetch("/api/auth/sign-in", {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ email, password }),
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          setError(data.error || "Failed to send magic link");
+          setError(data.error || "Authentication failed");
         } else {
-          setMessage(data.message || "Magic link sent! Check your email.");
+          setMessage(data.message || "Success!");
+          // After successful sign-in, redirect
+          if (mode === "signin" || data.session !== null) {
+            const redirect = searchParams.get("redirect") || "/onboarding";
+            setTimeout(() => router.push(redirect), 500);
+          }
         }
       } catch {
         setError("Something went wrong. Please try again.");
@@ -62,10 +75,12 @@ function LoginContent() {
         {/* Header */}
         <div className="text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            Sign in to your account
+            {mode === "signin" ? "Sign in" : "Create an account"}
           </h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Enter your email to receive a one-time login link
+            {mode === "signin"
+              ? "Enter your email and password"
+              : "Enter your email and choose a password"}
           </p>
         </div>
 
@@ -100,7 +115,28 @@ function LoginContent() {
               onChange={(e) => setEmail(e.target.value)}
               className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               placeholder="you@example.com"
-              disabled={!!message}
+              disabled={!!isPending || !!message}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+              placeholder="At least 6 characters"
+              disabled={!!isPending || !!message}
             />
           </div>
 
@@ -109,14 +145,24 @@ function LoginContent() {
             disabled={isPending || !!message}
             className="w-full flex justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isPending ? "Sending..." : message ? "Link Sent" : "Send Magic Link"}
+            {isPending
+              ? (mode === "signin" ? "Signing in..." : "Creating account...")
+              : (message
+                  ? (mode === "signin" ? "Signed in" : "Account created")
+                  : (mode === "signin" ? "Sign in" : "Sign up"))}
           </button>
         </form>
 
-        {/* Footer */}
-        <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-500">
-          We&#39;ll send you a secure one-time authentication link.
-          No password required.
+        {/* Toggle between sign-in and sign-up */}
+        <p className="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-500">
+          {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
+          <button
+            type="button"
+            onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); setError(""); }}
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {mode === "signin" ? "Sign up" : "Sign in"}
+          </button>
         </p>
 
         {/* Consent links */}
