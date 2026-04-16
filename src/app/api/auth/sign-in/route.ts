@@ -18,12 +18,13 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
     const origin = process.env.APP_BASE_URL || "http://localhost:3000";
-    const redirect = redirectTo || `${origin}/onboarding`;
+    const next = redirectTo || "/onboarding";
+    const emailRedirectTo = `${origin}/auth/confirm?next=${encodeURIComponent(next)}`;
 
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: {
-        emailRedirectTo: redirect,
+        emailRedirectTo,
       },
     });
 
