@@ -193,6 +193,9 @@ export default function SettingsPage({
         throw new Error(e.error || "Failed to create import");
       }
       const { importId, signedUrl, token, path } = await createRes.json();
+      if (!signedUrl || !token || !path) {
+        throw new Error("Invalid signed upload response from server");
+      }
       const signedUrlToken = { signedUrl, token, path };
 
       // Step 2: Upload ZIP using Supabase browser client with signed URL
