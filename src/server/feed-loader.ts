@@ -56,7 +56,10 @@ export async function loadTodaysBrief(userId: string): Promise<{
   }
 
   // If brief exists but has no items, it might still be generating
-  if (brief.status === "pending" && brief.daily_brief_items.length === 0) {
+  if (
+    (brief.status === "pending" || brief.status === "generating") &&
+    brief.daily_brief_items.length === 0
+  ) {
     return null;
   }
 
