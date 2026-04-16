@@ -547,46 +547,49 @@ export async function parseSafariHistoryZip(
       .slice(0, 20)
       .map(([d, c]) => ({ domain: d, count: c }));
 
-    // Build staged signals: per domain-topic pair, weight capped
-    // The spec requirement: "imported history cannot overpower explicit
-    // preferences." We enforce this by capping each domain's TOTAL
-    // contribution across all its inferred topics, then distributing evenly.
+    // Build staged signals: per-domain TOTAL weight capped.
+    // The spec requirement: a single domain's TOTAL contribution across ALL
+    // inferred topics must not exceed HISTORY_IMPORT_DOMAIN_WEIGHT_CAP.
+    // Algorithm:
+    //   1. Compute raw weight per topic pair (count × 0.01)
+    //   2. Sum all raw weights per domain → domainTotalRaw
+    //   3. If domainTotalRaw > cap, set domainFinalTotal = cap
+    //      Otherwise domainFinalTotal = domainTotalRaw
+    //   4. Distribute domainFinalTotal proportionally among its topic pairs
+    // This ensures no single domain can overpower explicit manual preferences.
     const stagedSignals: ParseResult["stagedSignals"] = [];
     const now = new Date();
     const expiresAt = new Date(
       now.getTime() + HISTORY_IMPORT_MAX_AGE_DAYS * 24 * 60 * 60 * 1_000
     );
 
-    // Per-domain total weight is the sum of all its topic-topic-pair weights.
-    // First compute per-domain raw score, then apply the cap to the domain total.
+    // Step 1&2: compute per-domain raw score (sum of all topic-pair weights)
     const domainRawScores: Record<string, number> = {};
     type PendingSignal = {
       topic: string;
-      rawCount: number;
+      rawWeight: number;
       domain: string;
     };
     const pendingSignals: PendingSignal[] = [];
 
     for (const [domain, topics] of Object.entries(perDomainTopics)) {
       for (const [topic, rawCount] of Object.entries(topics)) {
-        pendingSignals.push({ topic, rawCount, domain });
+        const rawWeight = rawCount * 0.01;
+        pendingSignals.push({ topic, rawWeight, domain });
         domainRawScores[domain] =
-          (domainRawScores[domain] ?? 0) + rawCount * 0.01;
+          (domainRawScores[domain] ?? 0) + rawWeight;
       }
     }
 
-    // Cap each domain's total contribution, then distribute proportionally
-    // among its topic pairs (preserving relative importance within the domain)
-    for (const { topic, rawCount, domain } of pendingSignals) {
+    // Steps 3&4: cap domain total, distribute proportionally
+    for (const { topic, rawWeight, domain } of pendingSignals) {
       const domainTotalRaw = domainRawScores[domain];
-      // Proportion of this pair within the domain's raw score
-      const pairFraction = (rawCount * 0.01) / (domainTotalRaw || 1);
-      // Domain's final capped total, distributed by fraction
-      const cappedDomainTotal = Math.min(
+      const domainFinalTotal = Math.min(
         domainTotalRaw,
         HISTORY_IMPORT_DOMAIN_WEIGHT_CAP
       );
-      const weight = Math.max(0.01, pairFraction * cappedDomainTotal);
+      const proportion = rawWeight / (domainTotalRaw || 1);
+      const weight = Math.max(0.01, proportion * domainFinalTotal);
 
       stagedSignals.push({
         normalized_topic: topic,

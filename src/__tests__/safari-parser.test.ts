@@ -172,4 +172,41 @@ describe("parseSafariHistoryZip", () => {
     expect(JSON.stringify(result.topDomains)).not.toContain("https://");
     expect(JSON.stringify(result.stagedSignals)).not.toContain("https://");
   });
+
+  it("caps per-domain total weight at 0.5 across all topics", async () => {
+    const base = Date.now();
+    // 200 distinct URLs on techcrunch.com with varied keywords to trigger
+    // many topic inferences — raw weight will be well above 0.5
+    const entries: Record<string, unknown>[] = [];
+    const keywordSets = [
+      "startup funding series A venture capital",
+      "artificial intelligence AI model gpt llm generative",
+      "cloud serverless kubernetes edge computing",
+    ];
+    for (let i = 0; i < 200; i++) {
+      entries.push(
+        makeVisit(
+          `https://techcrunch.com/article/${i}`,
+          0,
+          keywordSets[i % keywordSets.length],
+          base
+        )
+      );
+    }
+    const buffer = await createTestZip(entries, 1);
+    const result = await parseSafariHistoryZip(Readable.from(buffer), "import-cap-test");
+
+    // Sum all signal weights for techcrunch.com across every topic
+    const domainTotal = result.stagedSignals
+      .filter((s) => s.raw_value === "techcrunch.com")
+      .reduce((sum, s) => sum + s.weight, 0);
+
+    // Domain total must not exceed 0.5 regardless of visit count
+    expect(domainTotal).toBeLessThanOrEqual(0.501);
+    // Should still have multiple topic signals (not collapsed to one)
+    const tcSignals = result.stagedSignals.filter(
+      (s) => s.raw_value === "techcrunch.com"
+    );
+    expect(tcSignals.length).toBeGreaterThan(1);
+  });
 });
