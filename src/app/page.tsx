@@ -1,24 +1,47 @@
-import Link from "next/link";
+"use client";
 
-export default function LandingPage() {
+import Link from "next/link";
+import { useSupabase } from "@/lib/supabase-provider";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+function LandingPageContent() {
+  const router = useRouter();
+  const { session, loading, refreshSession } = useSupabase();
+
+  // If session exists, jump to feed
+  useEffect(() => {
+    if (session && !loading) {
+      router.push("/feed");
+    }
+  }, [session, loading, router]);
+
+  if (loading || session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Nav */}
       <header className="border-b border-zinc-200 dark:border-zinc-800">
         <nav className="max-w-5xl mx-auto flex items-center justify-between px-6 py-4">
           <span className="text-lg font-semibold">AI News Brief</span>
-          <div className="flex gap-4 text-sm">
+          <div className="flex gap-3 text-sm">
             <Link
-              href="/feed"
+              href="/login"
               className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
             >
-              Feed
+              Sign in
             </Link>
             <Link
-              href="/settings"
-              className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              href="/login?mode=signup"
+              className="inline-flex items-center justify-center px-4 py-1.5 text-sm font-medium text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
             >
-              Settings
+              Create account
             </Link>
           </div>
         </nav>
@@ -35,22 +58,21 @@ export default function LandingPage() {
             </span>
           </h1>
           <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-10 max-w-xl mx-auto">
-            Connect your X or Google account and we curate the top 5 AI and
-            tech stories every day based on what you actually care about. No
-            noise. Just signal.
+            Create an account and we curate the top 5 AI and tech stories every
+            day based on what you actually care about. No noise. Just signal.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              href="/feed"
+              href="/login?mode=signup"
               className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
             >
-              See Today&#39;s Briefing
+              Create Account
             </Link>
             <Link
-              href="/settings"
+              href="/login"
               className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium border border-zinc-300 dark:border-zinc-700 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              Link Your Account
+              Sign In
             </Link>
           </div>
         </section>
@@ -68,15 +90,15 @@ export default function LandingPage() {
             <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
               <h3 className="font-semibold mb-2">Interest-Aware</h3>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Your linked accounts shape what surfaces — your X follows,
-                Google interests, and manual preferences.
+                Your browsing history shapes what surfaces — import your
+                Safari history or manually pick topics you care about.
               </p>
             </div>
             <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
               <h3 className="font-semibold mb-2">Private by Default</h3>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                OAuth tokens are encrypted at rest. Disconnect anytime.
-                Your data is never sold.
+                Sign in to get started, import Safari history to strengthen
+                personalization. Your data is never sold.
               </p>
             </div>
           </div>
@@ -88,9 +110,6 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
           <span>AI News Brief {new Date().getFullYear()}</span>
           <div className="flex gap-4 mt-2 sm:mt-0">
-            <Link href="/admin" className="hover:text-zinc-700 dark:hover:text-zinc-200">
-              Admin
-            </Link>
             <Link href="/privacy" className="hover:text-zinc-700 dark:hover:text-zinc-200">
               Privacy
             </Link>
@@ -101,5 +120,11 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <LandingPageContent />
   );
 }

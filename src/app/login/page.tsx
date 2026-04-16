@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, Suspense } from "react";
+import { useState, useTransition, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSupabase } from "@/lib/supabase-provider";
@@ -10,7 +10,7 @@ type Mode = "signin" | "signup";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { session } = useSupabase();
+  const { session, refreshSession } = useSupabase();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<Mode>("signin");
@@ -18,9 +18,16 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // Read initial mode from URL
+  useEffect(() => {
+    if (searchParams.get("mode") === "signup") {
+      setMode("signup");
+    }
+  }, [searchParams]);
+
   // Redirect if already logged in
   if (session) {
-    const redirect = searchParams.get("redirect") || "/onboarding";
+    const redirect = searchParams.get("redirect") || "/feed";
     router.push(redirect);
   }
 
@@ -57,11 +64,10 @@ function LoginContent() {
           setError(data.error || "Authentication failed");
         } else {
           setMessage(data.message || "Success!");
-          // After successful sign-in, redirect
-          if (mode === "signin" || data.session !== null) {
-            const redirect = searchParams.get("redirect") || "/onboarding";
-            setTimeout(() => router.push(redirect), 500);
-          }
+          // Refresh the browser-side session so SupabaseProvider picks it up
+          await refreshSession();
+          const redirect = searchParams.get("redirect") || "/feed";
+          router.push(redirect);
         }
       } catch {
         setError("Something went wrong. Please try again.");
@@ -70,7 +76,7 @@ function LoginContent() {
   };
 
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-zinc-50 dark:bg-black">
+    <div className="flex min-h-screen flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-zinc-50 dark:bg-black">
       <div className="w-full max-w-md space-y-8 bg-white dark:bg-zinc-900 p-8 rounded-2xl shadow-lg">
         {/* Header */}
         <div className="text-center">
@@ -115,7 +121,7 @@ function LoginContent() {
               onChange={(e) => setEmail(e.target.value)}
               className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               placeholder="you@example.com"
-              disabled={!!isPending || !!message}
+              disabled={isPending || !!message}
             />
           </div>
 
@@ -136,7 +142,7 @@ function LoginContent() {
               onChange={(e) => setPassword(e.target.value)}
               className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               placeholder="At least 6 characters"
-              disabled={!!isPending || !!message}
+              disabled={isPending || !!message}
             />
           </div>
 
@@ -165,7 +171,6 @@ function LoginContent() {
           </button>
         </p>
 
-        {/* Consent links */}
         <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
           By creating an account, you agree to our{" "}
           <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
