@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/types/supabase";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/auth/sign-up
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
     });
 
     if (signUpError) {
+      logError("sign-up", signUpError, { email: email.trim().toLowerCase() });
       if (signUpError.message?.includes("already registered")) {
         return NextResponse.json(
           { error: "An account with this email already exists. Sign in instead." },
@@ -77,8 +79,8 @@ export async function POST(request: Request) {
       try {
         const { ensureUser } = await import("@/lib/auth");
         await ensureUser(signUpData.user.id, email);
-      } catch {
-        // Profile creation is best-effort; sign up succeeded regardless
+      } catch (ensureError) {
+        logError("sign-up-ensure-user", ensureError, { email: email.trim().toLowerCase() });
       }
     }
 
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
     });
     return jsonRes;
   } catch (err) {
-    console.error("Sign-up error:", err);
+    logError("sign-up", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -4,6 +4,7 @@ import { generateDailyBriefForUser } from "@/server/brief-engine";
 import { applyRateLimit } from "@/middleware/rate-limit";
 import type { NextRequest } from "next/server";
 import { db } from "@/server/db/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/briefs/refresh
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       brief_id: result.brief_id,
     });
   } catch (err) {
-    console.error("Brief refresh failed:", err);
+    logError("briefs-refresh", err, { userId: dbUser.id });
     return NextResponse.json(
       { error: "Brief refresh failed" },
       { status: 500 },

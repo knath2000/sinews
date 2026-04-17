@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 import { MIN_TOPIC_SELECTIONS, CURRENT_CONSENT_VERSION } from "@/lib/constants";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/onboarding
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
       message: "Onboarding complete",
     });
   } catch (error) {
-    console.error("Error saving onboarding:", error);
+    logError("onboarding", error, { userId: dbUser.id });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

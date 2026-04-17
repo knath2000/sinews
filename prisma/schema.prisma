@@ -32,6 +32,7 @@ model user_profiles {
   consent_version_accepted String?  @db.Text
   last_active_at           DateTime @default(now()) @db.Timestamptz
   is_admin                 Boolean  @default(false)
+  dark_mode                Boolean  @default(false)
 
   user users @relation(fields: [user_id], references: [id])
 
@@ -101,6 +102,7 @@ model articles {
   published_at       DateTime? @db.Timestamptz
   language           String    @default("en") @db.Text
   provider           String    @db.Text
+  is_fixture         Boolean   @default(false)
   license_class      String?   @db.Text
   image_url          String?   @db.Text
   cluster_id         String?   @db.Text
@@ -150,6 +152,7 @@ model daily_brief_items {
   score           Float
   summary         String? @db.Text
   why_recommended String? @db.Text
+  provenance_json String? @db.Text
 
   daily_brief daily_briefs @relation(fields: [daily_brief_id], references: [id], onDelete: Cascade)
   article     articles?    @relation(fields: [article_id], references: [id])

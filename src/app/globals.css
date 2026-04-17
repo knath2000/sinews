@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f1e8;
+  --foreground: #18130f;
+  --text-muted: #111111;
+  --text-subtle: #111111;
+  --text-panel-label: #111111;
+  --text-accent-panel: #111111;
 }
 
 @theme inline {
@@ -10,17 +14,290 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Accent palette */
+  --color-accent-sky: #38bdf8;
+  --color-accent-apricot: #fb923c;
+  --color-accent-lime: #a3e635;
+  --color-accent-berry: #f472b6;
+
+  /* Accent edge RGB values */
+  --ae-sky: 2, 132, 199;
+  --ae-sky-text: 37, 158, 228;
+  --ae-apricot: 234, 88, 12;
+  --ae-apricot-text: 251, 146, 60;
+  --ae-violet: 147, 51, 234;
+  --ae-violet-text: 168, 85, 247;
+  --ae-rose: 219, 39, 119;
+  --ae-rose-text: 244, 114, 182;
+
+  /* Light mode: glass surfaces with white base */
+  --glass-soft-bg: color-mix(in srgb, white 93%, transparent);
+  --glass-soft-border: color-mix(in srgb, #e3d5c8 88%, rgba(56, 189, 248, 0.05));
+  --glass-soft-blur: 18px;
+  --glass-panel-bg: color-mix(in srgb, white 97%, transparent);
+  --glass-panel-border: color-mix(in srgb, #e2d5c7 90%, rgba(56, 189, 248, 0.08));
+  --glass-panel-blur: 16px;
+  --glass-hero-bg: color-mix(in srgb, white 98%, transparent);
+  --glass-hero-border: color-mix(in srgb, #e0d2c3 90%, rgba(56, 189, 248, 0.10));
+  --glass-hero-blur: 18px;
+
+  /* Inline style surface variables — light mode */
+  --surface-card-bg: rgba(255, 255, 255, 0.97);
+  --surface-card-bg-strong: rgba(255, 255, 255, 0.99);
+  --surface-card-border: rgba(255, 255, 255, 0.92);
+  --surface-badge-bg: rgba(255, 255, 255, 0.94);
+  --surface-badge-border: rgba(232, 223, 212, 0.92);
+  --surface-soft-panel: rgba(244, 236, 226, 0.9);
+  --surface-border-white: rgba(214, 200, 186, 0.96);
+  --surface-border-subtle: rgba(196, 181, 167, 0.82);
+  --surface-dark-badge: rgba(15, 23, 42, 0.62);
+  --surface-warm-panel-border: rgba(251, 146, 60, 0.14);
+  --surface-sky-icon-bg: rgba(56, 189, 248, 0.10);
+  --surface-status-bg: rgba(255, 255, 255, 0.88);
+  --surface-status-border: rgba(217, 204, 190, 0.94);
+  --surface-status-dashed: rgba(196, 181, 167, 0.68);
+  --surface-sky-tint: rgba(56, 189, 248, 0.08);
+  --surface-sky-border-subtle: rgba(56, 189, 248, 0.15);
+  --surface-sky-border-strong: rgba(56, 189, 248, 0.16);
+  --surface-apricot-border: rgba(251, 146, 60, 0.18);
+
+  /* Gradient surfaces */
+  --bg-apricot-orange: linear-gradient(145deg, rgba(251, 146, 60, 0.12), rgba(244, 114, 182, 0.06));
+  --bg-sky-lime: linear-gradient(145deg, rgba(56, 189, 248, 0.10), rgba(163, 230, 53, 0.06));
+
+  /* Ambient gradients — light mode */
+  --ambient-apricot: rgba(251, 146, 60, 0.07);
+  --ambient-apricot-fade: rgba(244, 114, 182, 0.03);
+  --ambient-sky: rgba(56, 189, 248, 0.05);
+  --ambient-sky-fade: rgba(96, 165, 250, 0.03);
+  --ambient-lime: rgba(163, 230, 53, 0.03);
+  --ambient-top-wash: rgba(255, 255, 255, 0.60);
+
+  /* Tint pools — light mode */
+  --tint-sky-1: rgba(56, 189, 248, 0.06);
+  --tint-sky-2: rgba(56, 189, 248, 0.12);
+  --tint-apricot-1: rgba(251, 146, 60, 0.06);
+  --tint-apricot-2: rgba(251, 146, 60, 0.12);
+  --tint-lime-1: rgba(163, 230, 53, 0.06);
+  --tint-lime-2: rgba(163, 230, 53, 0.12);
+  --tint-berry-1: rgba(244, 114, 182, 0.06);
+  --tint-berry-2: rgba(244, 114, 182, 0.12);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============================================
+   DARK MODE — clean dark, high contrast
+   ============================================ */
+html.dark {
+  --background: #0f0f0f;
+  --foreground: #e8e4df;
+  --text-muted: #b4ada5;
+  --text-subtle: #9b948b;
+  --text-panel-label: #d4cdc5;
+  --text-accent-panel: #c4e7ff;
+
+  /* Accent RGB for inline styles */
+  --ae-sky-text: 56, 189, 248;
+  --ae-apricot-text: 251, 146, 60;
+  --ae-violet-text: 168, 85, 247;
+  --ae-rose-text: 244, 114, 182;
+
+  /* Glass surfaces — darker, more opaque */
+  --glass-soft-bg: color-mix(in srgb, #181614 88%, transparent);
+  --glass-soft-border: color-mix(in srgb, #242220 82%, rgba(56, 189, 248, 0.05));
+  --glass-panel-bg: color-mix(in srgb, #1e1c18 94%, transparent);
+  --glass-panel-border: color-mix(in srgb, #2a2824 84%, rgba(56, 189, 248, 0.06));
+  --glass-hero-bg: color-mix(in srgb, #242220 96%, transparent);
+  --glass-hero-border: color-mix(in srgb, #302e2a 86%, rgba(56, 189, 248, 0.08));
+
+  /* Inline style surfaces — dark mode (lighter bases, more opaque) */
+  --surface-card-bg: rgba(42, 40, 36, 0.90);
+  --surface-card-bg-strong: rgba(52, 50, 46, 0.97);
+  --surface-card-border: rgba(56, 54, 48, 0.60);
+  --surface-badge-bg: rgba(42, 40, 36, 0.88);
+  --surface-badge-border: rgba(60, 58, 52, 0.60);
+  --surface-soft-panel: rgba(38, 36, 32, 0.70);
+  --surface-border-white: rgba(76, 72, 66, 0.60);
+  --surface-border-subtle: rgba(60, 58, 52, 0.40);
+  --surface-dark-badge: rgba(240, 240, 240, 0.08);
+  --surface-warm-panel-border: rgba(251, 146, 60, 0.12);
+  --surface-sky-icon-bg: rgba(56, 189, 248, 0.08);
+  --surface-status-bg: rgba(34, 32, 28, 0.80);
+  --surface-status-border: rgba(56, 54, 48, 0.60);
+  --surface-status-dashed: rgba(56, 54, 48, 0.40);
+  --surface-sky-tint: rgba(56, 189, 248, 0.06);
+  --surface-sky-border-subtle: rgba(56, 189, 248, 0.12);
+  --surface-sky-border-strong: rgba(56, 189, 248, 0.16);
+  --surface-apricot-border: rgba(251, 146, 60, 0.16);
+
+  /* Gradient surfaces — dark */
+  --bg-apricot-orange: linear-gradient(145deg, rgba(251, 146, 60, 0.06), rgba(244, 114, 182, 0.03));
+  --bg-sky-lime: linear-gradient(145deg, rgba(56, 189, 248, 0.05), rgba(163, 230, 53, 0.02));
+
+  /* Ambient gradients — very subtle darkness */
+  --ambient-apricot: rgba(251, 146, 60, 0.03);
+  --ambient-apricot-fade: rgba(244, 114, 182, 0.02);
+  --ambient-sky: rgba(56, 189, 248, 0.02);
+  --ambient-sky-fade: rgba(96, 165, 250, 0.02);
+  --ambient-lime: rgba(163, 230, 53, 0.02);
+  --ambient-top-wash: rgba(255, 255, 255, 0.02);
+
+  /* Tint pools — dark */
+  --tint-sky-1: rgba(56, 189, 248, 0.04);
+  --tint-sky-2: rgba(56, 189, 248, 0.08);
+  --tint-apricot-1: rgba(251, 146, 60, 0.04);
+  --tint-apricot-2: rgba(251, 146, 60, 0.08);
+  --tint-lime-1: rgba(163, 230, 53, 0.04);
+  --tint-lime-2: rgba(163, 230, 53, 0.08);
+  --tint-berry-1: rgba(244, 114, 182, 0.04);
+  --tint-berry-2: rgba(244, 114, 182, 0.08);
+
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
+  min-height: 100%;
+  background:
+    radial-gradient(ellipse 80% 60% at 5% 10%, var(--tint-apricot-1), transparent),
+    radial-gradient(ellipse 60% 80% at 90% 15%, var(--tint-sky-1), transparent),
+    radial-gradient(ellipse 50% 40% at 75% 85%, var(--tint-berry-1), transparent),
+    radial-gradient(ellipse 40% 50% at 25% 65%, var(--tint-lime-1), transparent),
+    linear-gradient(170deg, #f8f3eb 0%, #efe6d6 34%, #ebf1f8 68%, #f7f1e7 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Geist", "SF Pro Text", sans-serif;
+  overflow-x: hidden;
+  transition: background 200ms ease, color 150ms ease;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-subtle {
+  color: var(--text-subtle);
+}
+
+.text-panel-label {
+  color: var(--text-panel-label);
+}
+
+.text-accent-panel {
+  color: var(--text-accent-panel);
+}
+
+.text-strong {
+  color: var(--foreground);
+}
+
+.editorial-line-clamp-2,
+.editorial-line-clamp-3,
+.editorial-line-clamp-4 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.editorial-line-clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.editorial-line-clamp-3 {
+  -webkit-line-clamp: 3;
+}
+
+.editorial-line-clamp-4 {
+  -webkit-line-clamp: 4;
+}
+
+html.dark body {
+  background:
+    radial-gradient(ellipse 80% 60% at 5% 10%, var(--tint-apricot-1), transparent),
+    radial-gradient(ellipse 60% 80% at 90% 15%, var(--tint-sky-1), transparent),
+    radial-gradient(ellipse 50% 40% at 75% 85%, var(--tint-berry-1), transparent),
+    radial-gradient(ellipse 40% 50% at 25% 65%, var(--tint-lime-1), transparent),
+    linear-gradient(170deg, #0f0f0f 0%, #0a0a0a 30%, #0c1014 65%, #12100e 100%);
+}
+
+::selection {
+  background: rgba(56, 189, 248, 0.22);
+}
+
+html.dark ::selection {
+  background: rgba(56, 189, 248, 0.35);
+}
+
+/* ── Motion System ────────────────────────────────────────────────── */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float-soft {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -6px, 0); }
+}
+
+@keyframes ambient-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(4px, -8px, 0) scale(1.03); }
+  66% { transform: translate3d(-6px, 4px, 0) scale(0.97); }
+}
+
+@keyframes glass-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.motion-fade-up { animation: fade-up 700ms ease both; }
+.motion-float-soft { animation: float-soft 10s ease-in-out infinite; }
+.motion-ambient { animation: ambient-drift 18s ease-in-out infinite; }
+
+.shimmer-hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg, transparent 35%,
+    rgba(255, 255, 255, 0.18) 48%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0.18) 52%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  background-position: -200% center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  border-radius: inherit;
+}
+
+.shimmer-hover:hover::after {
+  animation: glass-shimmer 1.2s ease forwards;
+  opacity: 1;
+}
+
+html.dark .shimmer-hover::after {
+  background: linear-gradient(
+    105deg, transparent 35%,
+    rgba(255, 255, 255, 0.04) 48%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.04) 52%,
+    transparent 65%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

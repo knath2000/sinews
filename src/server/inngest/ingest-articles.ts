@@ -1,6 +1,7 @@
 import { inngest } from "./client";
 import { fetchFromTheNewsAPI, fetchAllRSSFeeds } from "../news-fetcher";
-import { articleExists, insertArticles, RawArticle } from "../article-loader";
+import { insertArticles, RawArticle } from "../article-loader";
+import { logError } from "../error-logger";
 
 /**
  * ingestArticles Job - Hourly
@@ -15,6 +16,9 @@ export const ingestArticles = inngest.createFunction(
       {
         cron: "0 * * * *", // Every hour
       },
+      {
+        event: "ingest.manual",
+      },
     ],
   },
   async ({ step }) => {
@@ -28,7 +32,7 @@ export const ingestArticles = inngest.createFunction(
           articles,
         };
       } catch (err) {
-        console.error("Failed to fetch from TheNewsAPI:", err);
+        logError("ingest-thenewsapi", err);
         return {
           source: "thenewsapi",
           count: 0,
@@ -47,7 +51,7 @@ export const ingestArticles = inngest.createFunction(
           articles,
         };
       } catch (err) {
-        console.error("Failed to fetch RSS feeds:", err);
+        logError("ingest-rss", err);
         return {
           source: "rss",
           count: 0,

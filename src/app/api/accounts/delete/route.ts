@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/accounts/delete
@@ -79,10 +80,7 @@ export async function POST(request: Request) {
       }
     } catch (supabaseError) {
       // Log but don't fail the response — local DB user is already deleted
-      console.warn(
-        "Supabase user deletion failed (local DB user still deleted):",
-        supabaseError
-      );
+      logError("supabase-user-delete", supabaseError, { userId });
     }
 
     return NextResponse.json({
@@ -90,7 +88,7 @@ export async function POST(request: Request) {
       message: "Account and all associated data have been permanently deleted.",
     });
   } catch (error) {
-    console.error("Error deleting account:", error);
+    logError("account-delete", error, { userId });
     return NextResponse.json(
       { error: "Failed to delete account. Please try again." },
       { status: 500 }

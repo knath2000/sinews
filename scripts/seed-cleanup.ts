@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { logError } from "../src/server/error-logger";
 
 const db = new PrismaClient();
 
@@ -18,7 +19,7 @@ async function cleanup() {
   console.log("  Cleaned up annotations");
   
   // Delete articles
-  await db.articles.deleteMany({ where: { provider: "seed" } });
+  await db.articles.deleteMany({ where: { is_fixture: true } });
   console.log("  Cleaned up seed articles");
   
   // Clean up test users and related data
@@ -45,4 +46,7 @@ async function cleanup() {
   await db.$disconnect();
 }
 
-cleanup().catch(console.error);
+cleanup().catch((error) => {
+  logError("seed-cleanup", error);
+  process.exit(1);
+});

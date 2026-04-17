@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 import { encrypt } from "@/server/crypto";
+import { logError } from "@/server/error-logger";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 /**
  * GET /api/accounts/google/callback — completes Google OAuth 2.0 flow.
@@ -10,6 +12,7 @@ import { encrypt } from "@/server/crypto";
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if ("status" in auth) return auth;
+  const appBaseUrl = getAppBaseUrl(request);
 
   // Check feature flag
   const { dbUser } = auth;
@@ -20,13 +23,13 @@ export async function GET(request: Request) {
 
   if (error) {
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=google_${error}`,
+      `${appBaseUrl}/settings?error=google_${error}`,
     );
   }
 
   if (!code || !state) {
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=missing_params`,
+      `${appBaseUrl}/settings?error=missing_params`,
     );
   }
 
@@ -43,7 +46,7 @@ export async function GET(request: Request) {
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/api/accounts/google/callback`;
+  const redirectUri = `${appBaseUrl}/api/accounts/google/callback`;
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(
@@ -68,7 +71,7 @@ export async function GET(request: Request) {
 
     if (!tokenResponse.ok) {
       const errText = await tokenResponse.text();
-      console.error("Google token exchange failed:", errText);
+      logError("google-token-exchange", new Error(errText), { userId: dbUser.id });
       return NextResponse.json(
         { error: "Failed to exchange code for tokens" },
         { status: 500 },
@@ -128,14 +131,14 @@ export async function GET(request: Request) {
       });
     } catch (err) {
       // Non-fatal: sync will also run on cron
-      console.warn("Failed to emit account.linked event:", err);
+      logError("google-account-linked-event", err, { userId: dbUser.id });
     }
 
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?connected=google`,
+      `${appBaseUrl}/settings?connected=google`,
     );
   } catch (err) {
-    console.error("Google OAuth callback error:", err);
+    logError("google-oauth-callback", err, { userId: dbUser.id });
     return NextResponse.json(
       { error: "OAuth callback failed" },
       { status: 500 },

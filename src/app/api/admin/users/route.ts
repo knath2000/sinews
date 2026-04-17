@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-admin";
 import { db } from "@/server/db/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * GET /api/admin/users
@@ -41,7 +42,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Error listing users:", error);
+    logError("admin-list-users", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

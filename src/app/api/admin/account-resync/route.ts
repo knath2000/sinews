@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-admin";
 import { inngest } from "@/server/inngest/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/admin/account-resync
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       provider,
     });
   } catch (error) {
-    console.error("Error sending account.ressync event:", error);
+    logError("admin-account-resync", error, { userId, provider });
     return NextResponse.json(
       { error: "Failed to enqueue account resync event" },
       { status: 500 },

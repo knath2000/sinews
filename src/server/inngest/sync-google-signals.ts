@@ -6,6 +6,7 @@ import {
   normalizeGoogleSignals,
   recordSyncFailure,
 } from "../providers/google";
+import { logError } from "../error-logger";
 
 /**
  * syncGoogleSignals Job — triggered by account.linked event + cron every 12 hours.
@@ -68,11 +69,7 @@ export const syncGoogleSignals = inngest.createFunction(
           const r = await syncUserGoogle(userId);
           results.push({ userId, status: r.status as string });
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(
-            `sync-google-signals: failed for user ${userId}:`,
-            msg,
-          );
+          logError("sync-google-signals-user", err, { userId });
           results.push({ userId, status: "error" });
         }
       }

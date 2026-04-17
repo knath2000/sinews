@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/types/supabase";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/auth/sign-in
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
     });
 
     if (error) {
+      logError("sign-in", error, { email: email.trim().toLowerCase() });
       return NextResponse.json(
         { error: error.message },
         { status: 401 }
@@ -73,8 +75,8 @@ export async function POST(request: Request) {
     try {
       const { ensureUser } = await import("@/lib/auth");
       await ensureUser(data.session.user.id, email);
-    } catch {
-      // best-effort
+    } catch (ensureError) {
+      logError("sign-in-ensure-user", ensureError, { email: email.trim().toLowerCase() });
     }
 
     // Return JSON with the session cookies from the response object
@@ -90,7 +92,7 @@ export async function POST(request: Request) {
     });
     return jsonRes;
   } catch (error) {
-    console.error("Sign-in error:", error);
+    logError("sign-in", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

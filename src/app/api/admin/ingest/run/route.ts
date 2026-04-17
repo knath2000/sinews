@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-admin";
 import { inngest } from "@/server/inngest/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/admin/ingest/run
@@ -18,7 +19,7 @@ export async function POST() {
 
     return NextResponse.json({ status: "queued" });
   } catch (error) {
-    console.error("Error sending ingest.manual event:", error);
+    logError("admin-ingest-queue", error);
     return NextResponse.json(
       { error: "Failed to enqueue ingestion event" },
       { status: 500 },

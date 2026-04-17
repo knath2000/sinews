@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-admin";
 import { db } from "@/server/db/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * GET /api/admin/source-policy
@@ -24,7 +25,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Error listing source policies:", error);
+    logError("admin-list-source-policies", error);
     return NextResponse.json(
       { error: "Failed to list source policies" },
       { status: 500 },
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
       qualityFloor: updated.quality_floor,
     });
   } catch (error) {
-    console.error("Error upserting source policy:", error);
+    logError("admin-upsert-source-policy", error, { sourceName });
     return NextResponse.json(
       { error: "Failed to upsert source policy" },
       { status: 500 },

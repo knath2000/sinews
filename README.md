@@ -1,146 +1,113 @@
-# AI News — Personalized AI News Briefs
+# AI News
 
-A Next.js application that automatically collects, categorizes, and ranks news articles, then delivers personalized daily briefing emails based on individual user interests and behaviors.
+Personalized AI news briefings built with Next.js, Supabase, Prisma, Inngest, and OpenAI.
 
-## Tech Stack
+## Stack
 
-- **Framework:** Next.js (App Router)
-- **Language:** TypeScript
-- **Auth:** Supabase Auth
-- **Database:** PostgreSQL via Prisma ORM
-- **Background Jobs:** Inngest
-- **AI:** OpenAI API (GPT models for classification and summarization)
-- **Error Tracking:** Sentry
-- **Styling:** Tailwind CSS v4
-- **Deployment:** Vercel
+- Next.js App Router
+- TypeScript
+- Prisma + Postgres
+- Supabase Auth + Storage
+- Inngest background jobs
+- OpenAI for article classification and brief summaries
+- Tailwind CSS v4
+- Vercel deployment
 
-## Getting Started
+## Local Development
 
-### 1. Prerequisites
-
-- Node.js 20+ and npm
-- PostgreSQL database
-- Supabase project (for auth)
-
-### 2. Install Dependencies
+1. Install dependencies:
 
 ```bash
 npm install
 ```
 
-### 3. Configure Environment Variables
-
-Copy the example env file and fill in your values:
+2. Configure environment variables:
 
 ```bash
 cp .env.example .env
 ```
 
-### 4. Setup the Database
+3. Generate the Prisma client and apply schema changes:
 
 ```bash
-# Generate the Prisma client
 npx prisma generate
-
-# Push the schema to your database (or use `prisma migrate dev`)
-npx prisma db push
+npx prisma migrate deploy
 ```
 
-> **Note:** If `prisma db push` fails due to no database connection, ensure `DATABASE_URL` is set correctly in `.env`. You can use the generated client without a live DB for development.
-
-### 5. Run the Development Server
+4. Run the app:
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the app.
+## Vercel Deployment
 
-## Project Structure
+The repo is configured so Vercel can build it directly from Git:
 
+- `postinstall` runs `prisma generate`
+- `next.config.ts` pins `turbopack.root` to the project directory
+- OAuth callbacks resolve their host from `APP_BASE_URL`, then Vercel envs, then the incoming request origin
+
+### Required Vercel Environment Variables
+
+Set these in the Vercel project before the first production deploy:
+
+- `DATABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ACCOUNT_TOKEN_ENCRYPTION_KEY`
+- `OPENAI_API_KEY`
+- `APP_BASE_URL`
+
+### Usually Required Depending On Enabled Features
+
+- `OPENAI_SUMMARY_MODEL`
+- `OPENAI_CLASSIFIER_MODEL`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `X_CLIENT_ID`
+- `X_CLIENT_SECRET`
+- `THENEWSAPI_API_KEY`
+- `INNGEST_EVENT_KEY`
+- `INNGEST_SIGNING_KEY`
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `SENTRY_DSN`
+- `NEXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_ORG`
+- `SENTRY_PROJECT`
+
+### Vercel Project Settings
+
+- Framework preset: `Next.js`
+- Install command: default
+- Build command: default (`npm run build`)
+- Output directory: default
+
+Set `APP_BASE_URL` to the production domain you register with Google/X OAuth, for example:
+
+```bash
+https://your-project.vercel.app
 ```
-├── prisma/
-│   └── schema.prisma          # Database schema
-├── prisma.config.ts           # Prisma 7 configuration
-├── src/
-│   ├── app/                   # Next.js App Router pages & layouts
-│   ├── components/            # Reusable UI components
-│   └── server/
-│       ├── db/                # Database client & queries
-│       ├── jobs/              # Inngest job definitions
-│       ├── providers/         # External API integrations (OpenAI, Supabase, news sources)
-│       ├── ranking/           # Article ranking algorithms
-│       └── ai/                # AI classification & summarization logic
-├── .env.example               # Environment variable template
-└── README.md
+
+If you attach a custom domain, update `APP_BASE_URL` and the provider redirect URIs to that domain.
+
+### Database Migrations
+
+Vercel builds should not be responsible for changing production schema. Run:
+
+```bash
+npx prisma migrate deploy
 ```
 
-## Database
+against the production database as part of your release workflow before or alongside the deploy.
 
-The application uses the following main tables:
+## Verification
 
-- **users** / **user_profiles** — User accounts and settings
-- **user_topic_preferences** — Topic weights for personalization
-- **linked_accounts** — OAuth-linked social accounts (X, Google)
-- **interest_signals** — Behavioral signals for interest inference
-- **articles** / **article_annotations** — Article catalog and AI-generated annotations
-- **daily_briefs** / **daily_brief_items** — Personalized daily briefing data
-- **feedback_events** — Like/dismiss signals for model feedback
-- **job_runs** — Background job execution tracking
-- **source_policies** — Source enable/disable and quality settings
-- **feature_flags** — Runtime feature toggles
+These checks passed against the current repo state:
 
-## Available Scripts
-
-| Command            | Description                        |
-| ------------------ | ---------------------------------- |
-| `npm run dev`      | Start development server           |
-| `npm run build`    | Production build                   |
-| `npm run start`    | Start production server            |
-| `npm run lint`     | Run ESLint                         |
-| `npx prisma generate` | Generate Prisma client types    |
-| `npx prisma db push`  | Push schema to database         |
-| `npx prisma studio`   | Open Prisma Studio (DB GUI)     |
-
-## API Authentication
-
-All user-facing API routes require authentication via the `requireAuth()` helper in `src/lib/auth-server.ts`. This verifies the Supabase session and ensures a corresponding DB user exists.
-
-Admin routes (under `/api/admin/*`) use `requireAdmin()` from `src/lib/auth-admin.ts`, which requires both authentication and that the user's `user_profiles.is_admin` flag is `true`.
-
-**Authenticated routes:**
-- `GET /api/me` — current user info
-- `POST /api/onboarding` — complete onboarding
-- `GET /api/briefs/today` — today's daily brief
-- `GET /api/feed` — article feed
-- `POST /api/feedback` — submit feedback
-- `DELETE /api/accounts/:provider` — disconnect a linked account
-- `GET /api/accounts/google/callback` — Google OAuth callback
-- `GET /api/accounts/x/callback` — X OAuth callback
-- `POST /api/accounts/delete` — delete account
-
-**Public routes:**
-- `POST /api/auth/sign-in` — send magic link
-- `GET /api/auth/sign-out` — sign out
-- `POST /api/accounts/google/start` — start Google OAuth
-- `POST /api/accounts/x/start` — start X OAuth
-- `/api/inngest` — Inngest webhooks (authenticated by Inngest)
-
-**Admin routes:** require `user_profiles.is_admin = true`
-- `GET /api/admin/users` — list all users
-
-## Account Deletion
-
-Users can permanently delete their accounts via `POST /api/accounts/delete` or through the Settings page. Deletion is atomic (Prisma transaction) and removes:
-
-1. **interest_signals** — behavioral interest data
-2. **feedback_events** — like/dismiss signals  
-3. **daily_briefs** — cascades to daily_brief_items
-4. **linked_accounts** — OAuth token records
-5. **user_topic_preferences** — manual topic selections
-6. **user_profiles** — profile settings
-7. **users** — core user record
-
-After the database deletion, the Supabase auth user is also deleted via the Admin API (`/admin/users/{id}`). If the Supabase deletion fails, the local database deletion still persists.
-
-The `is_admin` flag on `user_profiles` controls admin access. Only admins can access `/api/admin/*` routes.
+```bash
+npm run build
+npx tsc --noEmit
+```

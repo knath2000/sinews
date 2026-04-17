@@ -2,6 +2,7 @@ import { inngest } from "./client";
 import { classifyUnannotatedArticles } from "../article-classifier";
 import { generateDailyBriefForUser } from "../brief-engine";
 import { db } from "../db/client";
+import { logError } from "../error-logger";
 
 /**
  * batchAnnotateArticles Job - Runs after each ingestArticles cycle
@@ -95,10 +96,7 @@ export const generateAllDailyBriefs = inngest.createFunction(
           });
           count++;
         } catch (err) {
-          console.error(
-            `Failed to trigger brief for user ${user.id}:`,
-            err
-          );
+          logError("trigger-daily-brief", err, { userId: user.id });
         }
       }
       return { triggered_count: count, total_users: users.length };

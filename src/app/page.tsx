@@ -4,12 +4,79 @@ import Link from "next/link";
 import { useSupabase } from "@/lib/supabase-provider";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import {
+  ArrowUpRight,
+  ChevronRight,
+  Clock,
+  Newspaper,
+  Shield,
+  Sparkles,
+} from "lucide-react";
+
+const previewStories = [
+  {
+    title: "OpenAI rolls out a cleaner developer workflow",
+    source: "OpenAI",
+    asset: "/window.svg",
+    accent:
+      "linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(59, 130, 246, 0.7))",
+  },
+  {
+    title: "The Verge covers the next wave of consumer AI",
+    source: "The Verge",
+    asset: "/globe.svg",
+    accent:
+      "linear-gradient(135deg, rgba(251, 146, 60, 0.88), rgba(244, 114, 182, 0.78))",
+  },
+  {
+    title: "Wired looks at what ships next for hardware",
+    source: "Wired",
+    asset: "/file.svg",
+    accent:
+      "linear-gradient(135deg, rgba(168, 85, 247, 0.88), rgba(34, 197, 94, 0.72))",
+  },
+];
+
+function cssUrl(value: string): string {
+  return JSON.stringify(value);
+}
+
+function PreviewThumb({
+  asset,
+  accent,
+  label,
+  floating = false,
+}: {
+  asset: string;
+  accent: string;
+  label: string;
+  floating?: boolean;
+}) {
+  return (
+    <div
+      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/25 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.65)] ${floating ? "motion-float-soft" : ""}`}
+    >
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage: `${accent}, url(${cssUrl(asset)})`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center, center",
+          backgroundSize: "cover, 56%",
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/15" />
+      <span className="absolute left-2 top-2 z-10 inline-flex rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-600 shadow-sm">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 function LandingPageContent() {
   const router = useRouter();
-  const { session, loading, refreshSession } = useSupabase();
+  const { session, loading } = useSupabase();
 
-  // If session exists, jump to feed
   useEffect(() => {
     if (session && !loading) {
       router.push("/feed");
@@ -18,102 +85,263 @@ function LandingPageContent() {
 
   if (loading || session) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="motion-fade-up w-full max-w-md rounded-[32px] border border-white/70 bg-white/80 p-8 text-center shadow-[0_24px_80px_-48px_rgba(15,23,42,0.42)] backdrop-blur-xl">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-100 to-amber-50">
+            <Sparkles className="h-8 w-8 text-sky-500" />
+          </div>
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-900">
+            Loading your briefing
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-600">
+            We are checking your session and preparing the brief.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Nav */}
-      <header className="border-b border-zinc-200 dark:border-zinc-800">
-        <nav className="max-w-5xl mx-auto flex items-center justify-between px-6 py-4">
-          <span className="text-lg font-semibold">AI News Brief</span>
-          <div className="flex gap-3 text-sm">
+    <div className="relative min-h-screen overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="motion-float-soft absolute left-[-7rem] top-[-5rem] h-80 w-80 rounded-full bg-orange-200/50 blur-3xlbg-sky-500/10" />
+        <div
+          className="motion-float-soft absolute right-[-7rem] top-24 h-96 w-96 rounded-full bg-sky-200/50 blur-3xlbg-fuchsia-500/10"
+          style={{ animationDelay: "1.4s" }}
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.74),_transparent_30%)] opacity-80" />
+      </div>
+
+      <header className="relative z-10 border-b border-white/60 bg-white/55 backdrop-blur-xl">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-900 transition-transform hover:scale-[1.01]"
+          >
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg shadow-zinc-900/15">
+              <Newspaper className="h-5 w-5" />
+            </span>
+            <span className="leading-tight">
+              AI News Brief
+              <span className="block text-xs font-medium text-zinc-500">
+                A calmer daily stack
+              </span>
+            </span>
+          </Link>
+          <div className="flex items-center gap-3 text-sm">
             <Link
               href="/login"
-              className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="inline-flex items-center gap-1 rounded-full px-4 py-2 text-zinc-600 transition hover:-translate-y-0.5 hover:bg-white hover:text-zinc-900"
             >
               Sign in
+              <ChevronRight className="h-4 w-4" />
             </Link>
             <Link
               href="/login?mode=signup"
-              className="inline-flex items-center justify-center px-4 py-1.5 text-sm font-medium text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
+              className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 font-medium text-white shadow-lg shadow-zinc-900/10 transition hover:-translate-y-0.5 hover:bg-zinc-800"
             >
               Create account
+              <ArrowUpRight className="h-4 w-4" />
             </Link>
           </div>
         </nav>
       </header>
 
-      {/* Hero */}
-      <main className="flex-1">
-        <section className="max-w-3xl mx-auto px-6 pt-24 pb-16 text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-6">
-            Your daily 5-minute AI briefing,
-            <br />
-            <span className="text-blue-600 dark:text-blue-400">
-              personalized for you.
-            </span>
-          </h1>
-          <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-10 max-w-xl mx-auto">
-            Create an account and we curate the top 5 AI and tech stories every
-            day based on what you actually care about. No noise. Just signal.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              href="/login?mode=signup"
-              className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
-            >
-              Create Account
-            </Link>
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium border border-zinc-300 dark:border-zinc-700 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            >
-              Sign In
-            </Link>
+      <main className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
+        <section className="grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
+          <div className="motion-fade-up max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/75 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-zinc-500 shadow-sm backdrop-blur-xl">
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+              Personalized AI brief
+            </div>
+            <h1 className="mt-6 text-5xl font-semibold tracking-tight text-zinc-900 sm:text-6xl lg:text-7xl">
+              Your daily AI briefing, brighter and easier to scan.
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed text-zinc-600 sm:text-lg">
+              We curate the 5 stories that matter most, keep the flow vertical,
+              and bring in real article imagery so the feed feels calm instead of
+              crowded.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/login?mode=signup"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/10 transition hover:-translate-y-0.5 hover:bg-zinc-800"
+              >
+                Create account
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/80 bg-white/80 px-6 py-3 text-sm font-semibold text-zinc-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-white hover:text-zinc-900"
+              >
+                Sign in
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[24px] border border-white/75 bg-white/80 p-4 shadow-sm backdrop-blur-xl">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-400">
+                  Signal
+                </div>
+                <div className="mt-2 text-lg font-semibold text-zinc-900">
+                  5 stories
+                </div>
+                <p className="mt-1 text-sm text-zinc-600">
+                  No noise, just the stack.
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-white/75 bg-white/80 p-4 shadow-sm backdrop-blur-xl">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-400">
+                  Personal
+                </div>
+                <div className="mt-2 text-lg font-semibold text-zinc-900">
+                  Your interests
+                </div>
+                <p className="mt-1 text-sm text-zinc-600">
+                  Topics and history shape the brief.
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-white/75 bg-white/80 p-4 shadow-sm backdrop-blur-xl">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-400">
+                  Private
+                </div>
+                <div className="mt-2 text-lg font-semibold text-zinc-900">
+                  No selling
+                </div>
+                <p className="mt-1 text-sm text-zinc-600">
+                  Data stays in your account.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="motion-fade-up lg:justify-self-end" style={{ animationDelay: "80ms" }}>
+            <div className="rounded-[36px] border border-white/75 bg-white/80 p-5 shadow-[0_32px_100px_-58px_rgba(15,23,42,0.42)] backdrop-blur-xl">
+              <div className="rounded-[30px] bg-zinc-900 p-5 text-white shadow-[0_24px_60px_-36px_rgba(15,23,42,0.7)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/45">
+                      Morning stack
+                    </div>
+                    <div className="mt-2 text-2xl font-semibold tracking-tight">
+                      Five stories, one scroll.
+                    </div>
+                  </div>
+                  <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                    5 items
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {previewStories.map((story, index) => (
+                    <div
+                      key={story.title}
+                      className="flex items-center gap-3 rounded-[24px] border border-white/10 bg-white/10 p-3"
+                    >
+                      <PreviewThumb
+                        asset={story.asset}
+                        accent={story.accent}
+                        label={story.source}
+                        floating={index === 1}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
+                          Curated highlight
+                        </div>
+                        <p className="mt-1 text-sm font-medium leading-relaxed text-white/90">
+                          {story.title}
+                        </p>
+                      </div>
+                      <Clock className="h-4 w-4 shrink-0 text-white/45" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="rounded-[22px] border border-white/75 bg-gradient-to-br from-white/90 to-sky-50/90 p-4 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-400">
+                    Read
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-900">
+                    5m
+                  </div>
+                </div>
+                <div className="rounded-[22px] border border-white/75 bg-gradient-to-br from-white/90 to-amber-50/90 p-4 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-400">
+                    Match
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-900">
+                    smart
+                  </div>
+                </div>
+                <div className="rounded-[22px] border border-white/75 bg-gradient-to-br from-white/90 to-violet-50/90 p-4 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-400">
+                    Flow
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-900">
+                    smooth
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-[26px] border border-white/75 bg-white/85 p-4 shadow-sm">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.32em] text-zinc-400">
+                  <Shield className="h-3.5 w-3.5 text-blue-500" />
+                  Private by default
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                  Sign in, choose your interests, and get a brief that feels
+                  clean and intentional every morning.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Feature cards */}
-        <section className="max-w-4xl mx-auto px-6 pb-24">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <h3 className="font-semibold mb-2">5 Stories, Not 500</h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                We filter thousands of articles down to the 5 that matter most
-                to your interests.
+        <section className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            {
+              title: "5 stories, not 500",
+              body: "We shrink the firehose into a readable stack with enough context to act on.",
+            },
+            {
+              title: "Interest aware",
+              body: "Topics, browsing history, and feedback all shape what floats to the top.",
+            },
+            {
+              title: "Calm by design",
+              body: "Bright surfaces, softer motion, and a vertical flow keep the briefing easy to scan.",
+            },
+          ].map((card) => (
+            <div
+              key={card.title}
+              className="rounded-[28px] border border-white/75 bg-white/80 p-6 shadow-[0_22px_70px_-46px_rgba(15,23,42,0.36)] backdrop-blur-xl transition hover:-translate-y-1 hover:shadow-[0_28px_80px_-46px_rgba(15,23,42,0.42)]"
+            >
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-amber-50 text-sky-600">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold tracking-tight text-zinc-900">
+                {card.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                {card.body}
               </p>
             </div>
-            <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <h3 className="font-semibold mb-2">Interest-Aware</h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Your browsing history shapes what surfaces — import your
-                Safari history or manually pick topics you care about.
-              </p>
-            </div>
-            <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <h3 className="font-semibold mb-2">Private by Default</h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Sign in to get started, import Safari history to strengthen
-                personalization. Your data is never sold.
-              </p>
-            </div>
-          </div>
+          ))}
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+      <footer className="relative z-10 border-t border-white/60 bg-white/40 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-xs text-zinc-500 sm:flex-row sm:px-6 lg:px-8">
           <span>AI News Brief {new Date().getFullYear()}</span>
-          <div className="flex gap-4 mt-2 sm:mt-0">
-            <Link href="/privacy" className="hover:text-zinc-700 dark:hover:text-zinc-200">
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="transition hover:text-zinc-800">
               Privacy
             </Link>
-            <Link href="/terms" className="hover:text-zinc-700 dark:hover:text-zinc-200">
+            <Link href="/terms" className="transition hover:text-zinc-800">
               Terms
             </Link>
           </div>
@@ -124,7 +352,5 @@ function LandingPageContent() {
 }
 
 export default function LandingPage() {
-  return (
-    <LandingPageContent />
-  );
+  return <LandingPageContent />;
 }

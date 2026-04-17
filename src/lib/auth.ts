@@ -11,6 +11,7 @@ export interface AuthUser {
     consentVersionAccepted: string | null;
     lastActiveAt: Date;
     isAdmin: boolean;
+    darkMode: boolean;
   } | null;
 }
 
@@ -53,6 +54,7 @@ export async function ensureUser(supabaseUserId: string, email: string): Promise
           consentVersionAccepted: user.user_profiles.consent_version_accepted,
           lastActiveAt: user.user_profiles.last_active_at,
           isAdmin: user.user_profiles.is_admin,
+          darkMode: user.user_profiles.dark_mode,
         }
       : null,
   };

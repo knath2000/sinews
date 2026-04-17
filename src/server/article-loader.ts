@@ -1,56 +1,75 @@
 import { db } from "./db/client";
+import { normalizePublicImageUrl } from "./url-utils";
+import { sanitizeFeedSnippet, sanitizeFeedTitle } from "./text-utils";
+
+export type ApprovedRssFeed = {
+  name: string;
+  url: string;
+  licenseClass: string;
+  allowedHosts: string[];
+};
 
 // 10 approved RSS feeds for AI news
-export const APPROVED_RSS_FEEDS = [
+export const APPROVED_RSS_FEEDS: ApprovedRssFeed[] = [
   {
     name: "TechCrunch",
     url: "https://techcrunch.com/feed/",
     licenseClass: "standard",
+    allowedHosts: ["techcrunch.com"],
   },
   {
     name: "The Verge",
     url: "https://www.theverge.com/rss/index.xml",
     licenseClass: "standard",
+    allowedHosts: ["theverge.com"],
   },
   {
     name: "Ars Technica",
     url: "https://feeds.arstechnica.com/arstechnica/index",
     licenseClass: "standard",
+    allowedHosts: ["arstechnica.com"],
   },
   {
     name: "Wired",
     url: "https://www.wired.com/feed/rss",
     licenseClass: "standard",
+    allowedHosts: ["wired.com"],
   },
   {
     name: "MIT Technology Review",
     url: "https://www.technologyreview.com/feed/",
     licenseClass: "standard",
+    allowedHosts: ["technologyreview.com"],
   },
   {
     name: "VentureBeat",
     url: "https://venturebeat.com/feed/",
     licenseClass: "standard",
+    allowedHosts: ["venturebeat.com"],
   },
   {
     name: "The Register",
     url: "https://www.theregister.co.uk/headlines.atom",
     licenseClass: "standard",
+    allowedHosts: ["theregister.co.uk", "theregister.com"],
   },
   {
     name: "ZDNet",
     url: "https://www.zdnet.com/news/rss.xml",
     licenseClass: "standard",
+    allowedHosts: ["zdnet.com"],
   },
   {
     name: "Engadget",
     url: "https://www.engadget.com/rss.xml",
     licenseClass: "standard",
+    allowedHosts: ["engadget.com"],
   },
   {
     name: "OpenAI Blog",
     url: "https://openai.com/blog/rss.xml",
     licenseClass: "standard",
+    allowedHosts: ["openai.com"],
   },
 ];
 
@@ -62,6 +81,7 @@ export interface RawArticle {
   published_at?: Date | null;
   language?: string;
   provider: string;
+  is_fixture?: boolean;
   license_class?: string | null;
   image_url?: string | null;
 }
@@ -96,17 +116,19 @@ export async function insertArticles(
   if (newArticles.length === 0) return 0;
 
   await db.articles.createMany({
-    data: newArticles.map((a) => ({
-      canonical_url: a.canonical_url,
-      source_name: a.source,
-      title: a.title,
-      snippet: a.snippet,
-      published_at: a.published_at,
-      language: a.language ?? "en",
-      provider: a.provider,
-      license_class: a.license_class,
-      image_url: a.image_url,
-    })),
+      data: newArticles.map((a) => ({
+        title: sanitizeFeedTitle(a.title) ?? (a.title.trim() || "Untitled"),
+        snippet: sanitizeFeedSnippet(a.snippet),
+        canonical_url: a.canonical_url,
+        source_name: a.source,
+        published_at: a.published_at,
+        language: a.language ?? "en",
+        provider: a.provider,
+        is_fixture: a.is_fixture ?? false,
+        license_class: a.license_class,
+        image_url:
+          normalizePublicImageUrl(a.image_url ?? "", a.canonical_url) ?? null,
+      })),
   });
 
   return newArticles.length;

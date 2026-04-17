@@ -4,11 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "postinstall": "prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "reset:content": "tsx scripts/reset-derived-content.ts",
+    "backfill:article-text": "tsx scripts/backfill-article-text.ts",
+    "backfill:thumbnail": "tsx scripts/backfill-thumbnail-images.ts",
+    "backfill:thumbnails": "tsx scripts/backfill-thumbnail-images.ts",
+    "backfill:titles": "tsx scripts/backfill-article-text.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

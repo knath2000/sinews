@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-admin";
 import { db } from "@/server/db/client";
 import { FLAG_KEYS, type FlagKey } from "@/lib/flags";
 import { invalidateFlagCache } from "@/server/feature-flags";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/admin/flags
@@ -22,7 +23,7 @@ export async function GET() {
 
     return NextResponse.json({ flags });
   } catch (error) {
-    console.error("Error listing flags:", error);
+    logError("admin-list-flags", error);
     return NextResponse.json(
       { error: "Failed to list flags" },
       { status: 500 },
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
       newValue: updated.enabled,
     });
   } catch (error) {
-    console.error("Error updating feature flag:", error);
+    logError("admin-update-flag", error, { flagKey });
     return NextResponse.json(
       { error: "Failed to update feature flag" },
       { status: 500 },

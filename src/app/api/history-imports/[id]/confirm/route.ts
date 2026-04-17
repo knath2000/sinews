@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * POST /api/history-imports/[id]/confirm
@@ -54,45 +55,57 @@ export async function POST(
   try {
     stagedSignals = JSON.parse(stagedSignalsJson) as typeof stagedSignals;
   } catch {
+    logError("history-import-confirm-parse", new Error("Invalid staged signals data"), {
+      importId: id,
+      userId: dbUser.id,
+    });
     return NextResponse.json(
       { error: "Invalid staged signals data" },
       { status: 500 }
     );
   }
 
-  await db.$transaction(async (tx) => {
-    // Delete all prior history_import signals for this user
-    await tx.interest_signals.deleteMany({
-      where: { user_id: dbUser.id, provider: "history_import" },
-    });
-
-    // Insert new signals
-    if (stagedSignals.length > 0) {
-      await tx.interest_signals.createMany({
-        data: stagedSignals.map((s) => ({
-          user_id: dbUser.id,
-          provider: "history_import",
-          signal_type: "safari_history_import",
-          normalized_topic: s.normalized_topic,
-          weight: s.weight,
-          confidence: s.confidence,
-          raw_value: s.raw_value,
-          observed_at: new Date(s.observed_at),
-          expires_at: new Date(s.expires_at),
-          source_reference: s.source_reference,
-          signal_strength_bucket: Math.round(
-            Math.min(5, Math.max(0, s.weight * 5))
-          ),
-        })),
+  try {
+    await db.$transaction(async (tx) => {
+      // Delete all prior history_import signals for this user
+      await tx.interest_signals.deleteMany({
+        where: { user_id: dbUser.id, provider: "history_import" },
       });
-    }
 
-    // Mark import confirmed
-    await tx.history_imports.update({
-      where: { id },
-      data: { status: "confirmed", confirmed_at: new Date() },
+      // Insert new signals
+      if (stagedSignals.length > 0) {
+        await tx.interest_signals.createMany({
+          data: stagedSignals.map((s) => ({
+            user_id: dbUser.id,
+            provider: "history_import",
+            signal_type: "safari_history_import",
+            normalized_topic: s.normalized_topic,
+            weight: s.weight,
+            confidence: s.confidence,
+            raw_value: s.raw_value,
+            observed_at: new Date(s.observed_at),
+            expires_at: new Date(s.expires_at),
+            source_reference: s.source_reference,
+            signal_strength_bucket: Math.round(
+              Math.min(5, Math.max(0, s.weight * 5))
+            ),
+          })),
+        });
+      }
+
+      // Mark import confirmed
+      await tx.history_imports.update({
+        where: { id },
+        data: { status: "confirmed", confirmed_at: new Date() },
+      });
     });
-  });
+  } catch (error) {
+    logError("history-import-confirm", error, { importId: id, userId: dbUser.id });
+    return NextResponse.json(
+      { error: "Failed to confirm Safari import" },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
     ok: true,

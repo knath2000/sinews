@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * GET /api/me
@@ -42,7 +43,7 @@ export async function GET() {
       onboardingComplete: dbUser.profile?.onboarding_complete ?? false,
     });
   } catch (error) {
-    console.error("Error fetching user:", error);
+    logError("me", error, { userId: dbUser.id });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

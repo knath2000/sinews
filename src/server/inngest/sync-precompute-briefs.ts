@@ -2,6 +2,7 @@ import { inngest } from "./client";
 import { db } from "../db/client";
 import { isFeatureEnabled } from "../feature-flags";
 import { generateDailyBriefForUser } from "../brief-engine";
+import { logError } from "../error-logger";
 
 /**
  * syncPrecomputeBriefs Job — triggered by cron every hour.
@@ -41,6 +42,7 @@ export const syncPrecomputeBriefs = inngest.createFunction(
           status: "running",
         },
       });
+      const jobRunId = jobRun.id;
 
       try {
         // Get all active users (last_active_at > 7 days)
@@ -132,18 +134,15 @@ export const syncPrecomputeBriefs = inngest.createFunction(
               briefId: briefResult.brief_id,
             });
           } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(
-              `sync-precompute-briefs: failed for user ${userId}:`,
-              msg
-            );
-            results.push({ userId, status: "error", reason: msg });
+            const reason = err instanceof Error ? err.message : String(err);
+            logError("sync-precompute-briefs-user", err, { userId });
+            results.push({ userId, status: "error", reason });
           }
         }
 
         // Update job_runs status
         await db.job_runs.update({
-          where: { id: jobRun.id },
+          where: { id: jobRunId },
           data: {
             status: "completed",
             finished_at: new Date(),
@@ -158,8 +157,9 @@ export const syncPrecomputeBriefs = inngest.createFunction(
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // Mark job as failed
+        logError("sync-precompute-briefs-job", err, { jobRunId });
         await db.job_runs.update({
-          where: { id: jobRun.id },
+          where: { id: jobRunId },
           data: {
             status: "failed",
             finished_at: new Date(),

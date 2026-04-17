@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { requireAuth } from "@/lib/auth-server";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 /**
  * POST /api/accounts/x/start — starts the X (Twitter) OAuth 2.0 PKCE flow.
@@ -21,8 +22,7 @@ export async function POST(request: Request) {
   }
 
   const clientId = process.env.X_CLIENT_ID;
-  const redirectUri =
-    `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/api/accounts/x/callback`;
+  const redirectUri = `${getAppBaseUrl(request)}/api/accounts/x/callback`;
 
   if (!clientId) {
     return NextResponse.json(

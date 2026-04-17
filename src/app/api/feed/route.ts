@@ -3,6 +3,7 @@ import { loadTodaysBrief } from "@/server/feed-loader";
 import { requireAuth } from "@/lib/auth-server";
 import { applyRateLimit } from "@/middleware/rate-limit";
 import { generateDailyBriefForUser } from "@/server/brief-engine";
+import { logError } from "@/server/error-logger";
 
 /**
  * GET /api/feed — returns today's 5-article brief.
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     if (!inProgressBrief) {
       // Trigger generation fire-and-forget
       generateDailyBriefForUser(dbUser.id).catch((err) => {
-        console.error("Background brief generation failed:", err);
+        logError("background-brief-generation", err, { userId: dbUser.id });
       });
     }
 

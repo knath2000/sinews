@@ -1,4 +1,12 @@
 import { db } from "@/server/db/client";
+import { isFixtureArticle } from "@/server/fixture-utils";
+import { logError } from "@/server/error-logger";
+import {
+  sanitizeFeedSnippet,
+  sanitizeFeedText,
+  sanitizeFeedTitle,
+} from "@/server/text-utils";
+import { parseBriefItemProvenance } from "@/lib/safari-insights";
 
 /**
  * Types used by the feed page.
@@ -9,10 +17,12 @@ interface FeedArticle {
   title: string;
   source_name: string;
   canonical_url: string;
+  image_url: string | null;
   published_at: Date | null;
   summary: string | null;
   why_recommended: string | null;
   matched_signals: string[] | null;
+  provenance: ReturnType<typeof parseBriefItemProvenance>;
   rank: number;
   score: number;
   brief_item_id: number;
@@ -63,24 +73,76 @@ export async function loadTodaysBrief(userId: string): Promise<{
     return null;
   }
 
-  const articles: FeedArticle[] = brief.daily_brief_items.map((item) => ({
-    id: item.article?.id ?? 0,
-    title: item.article?.title ?? "Untitled",
-    source_name: item.article?.source_name ?? "Unknown",
-    canonical_url: item.article?.canonical_url ?? "#",
-    published_at: item.article?.published_at ?? null,
-    summary: item.summary,
-    why_recommended: item.why_recommended,
-    matched_signals: item.article?.article_annotations
-      ? deriveMatchedSignals(
-          item.article.article_annotations.topics_json,
-          item.article.article_annotations.entities_json
-        )
-      : null,
-    rank: item.rank,
-    score: item.score,
-    brief_item_id: item.id,
-  }));
+  const articlesWithSource = brief.daily_brief_items
+    .map((item) => {
+      const article = item.article;
+      if (!article) return null;
+
+      return {
+        article,
+        feedArticle: {
+          id: article.id,
+          title: sanitizeFeedTitle(article.title) ?? "Untitled",
+          source_name: article.source_name ?? "Unknown",
+          canonical_url: article.canonical_url ?? "#",
+          image_url: article.image_url?.trim() || null,
+          published_at: article.published_at ?? null,
+          summary: sanitizeFeedSnippet(item.summary),
+          why_recommended: sanitizeFeedText(item.why_recommended, {
+            stripHtml: true,
+            maxLength: 200,
+          }),
+          matched_signals: article.article_annotations
+            ? deriveMatchedSignals(
+                article.article_annotations.topics_json,
+                article.article_annotations.entities_json
+              )
+            : null,
+          provenance: parseBriefItemProvenance(item.provenance_json),
+          rank: item.rank,
+          score: item.score,
+          brief_item_id: item.id,
+        },
+      };
+    })
+    .filter(
+      (entry): entry is { article: NonNullable<typeof brief.daily_brief_items[number]["article"]>; feedArticle: FeedArticle } =>
+        entry !== null
+    );
+
+  const articles = articlesWithSource
+    .filter(({ article }) => {
+      return !isFixtureArticle({
+        canonical_url: article.canonical_url,
+        provider: article.provider,
+        license_class: article.license_class,
+        is_fixture: article.is_fixture,
+      });
+    })
+    .map(({ feedArticle }) => feedArticle);
+
+  const skippedCount = articlesWithSource.length - articles.length;
+  if (skippedCount > 0) {
+    logError(
+      "feed-load-filtered-fixtures",
+      new Error("Filtered fixture articles from today's brief"),
+      {
+        briefId: brief.id,
+        userId,
+        skippedCount,
+        totalItems: brief.daily_brief_items.length,
+      }
+    );
+  }
+
+  if (articles.length === 0) {
+    logError("feed-load-empty-after-filtering", new Error("No eligible articles remained after filtering brief items"), {
+      briefId: brief.id,
+      userId,
+      totalItems: brief.daily_brief_items.length,
+    });
+    return null;
+  }
 
   return { articles, generatedAt: brief.generated_at };
 }

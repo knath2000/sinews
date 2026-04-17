@@ -3,6 +3,12 @@ import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 import type { NextRequest } from "next/server";
 import { applyRateLimit } from "@/middleware/rate-limit";
+import { logError } from "@/server/error-logger";
+import {
+  sanitizeFeedSnippet,
+  sanitizeFeedText,
+  sanitizeFeedTitle,
+} from "@/server/text-utils";
 
 /**
  * GET /api/briefs/today
@@ -58,17 +64,20 @@ export async function GET(request: NextRequest) {
           items: existingBrief.daily_brief_items.map((item) => ({
             rank: item.rank,
             score: item.score,
-            summary: item.summary,
-            whyRecommended: item.why_recommended,
+            summary: sanitizeFeedSnippet(item.summary),
+            whyRecommended: sanitizeFeedText(item.why_recommended, {
+              stripHtml: true,
+              maxLength: 200,
+            }),
             article: item.article
               ? {
                   id: item.article.id,
-                  title: item.article.title,
+                  title: sanitizeFeedTitle(item.article.title) ?? "Untitled",
                   sourceName: item.article.source_name,
                   canonicalUrl: item.article.canonical_url,
-                  snippet: item.article.snippet,
+                  snippet: sanitizeFeedSnippet(item.article.snippet),
                   publishedAt: item.article.published_at,
-                  imageUrl: item.article.image_url,
+                  imageUrl: item.article.image_url?.trim() || null,
                 }
               : null,
           })),
@@ -83,7 +92,7 @@ export async function GET(request: NextRequest) {
       message: "Brief is being prepared",
     });
   } catch (error) {
-    console.error("Error fetching brief:", error);
+    logError("briefs-today", error, { userId: dbUser.id });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isFeatureEnabled } from "@/server/feature-flags";
 import { requireAuth } from "@/lib/auth-server";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 /**
  * POST /api/accounts/google/start — starts Google OAuth 2.0 flow.
@@ -24,8 +25,7 @@ export async function POST(request: Request) {
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri =
-    `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/api/accounts/google/callback`;
+  const redirectUri = `${getAppBaseUrl(request)}/api/accounts/google/callback`;
 
   if (!clientId) {
     return NextResponse.json(

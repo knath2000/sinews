@@ -10,6 +10,7 @@ import {
   recordSyncFailure,
   resetSyncFailure,
 } from "../providers/x";
+import { logError } from "../error-logger";
 
 /**
  * syncXSignals Job — triggered by account.linked event + cron every 6 hours.
@@ -80,8 +81,7 @@ export const syncXSignals = inngest.createFunction(
           const r = await syncUserX(userId);
           results.push({ userId, status: r.status as string });
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(`sync-x-signals: failed for user ${userId}:`, msg);
+          logError("sync-x-signals-user", err, { userId });
           results.push({ userId, status: "error" });
         }
       }

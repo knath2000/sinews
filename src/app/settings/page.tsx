@@ -1,9 +1,34 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { X as XIcon, Wifi, CircleUser, Building2, Globe, Trash2, LogOut } from "lucide-react";
+import {
+  ChevronRight,
+  CircleUser,
+  Building2,
+  Globe,
+  LogOut,
+  Newspaper,
+  Sparkles,
+  Trash2,
+  Wifi,
+  X as XIcon,
+  User,
+  Edit3,
+  Check,
+} from "lucide-react";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
+import { TIMEZONES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
+import { PageShell, ShellCard, ShellHero, ShellSoftCard } from "@/components/page-shell";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { humanizeSafariTopic, type SafariImportSummary } from "@/lib/safari-insights";
+
+const sidebarLinks = [
+  { href: "/feed", label: "Feed" },
+  { href: "/settings", label: "Settings" },
+  { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
+];
 
 interface LinkedAccountInfo {
   provider: string;
@@ -25,6 +50,11 @@ export default function SettingsPage({
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccountInfo[]>([]);
   const [topics, setTopics] = useState<Set<string>>(new Set());
   const [savingTopic, setSavingTopic] = useState<string | null>(null);
+  // Profile editing state
+  const [profileDisplayName, setProfileDisplayName] = useState("");
+  const [profileTimezone, setProfileTimezone] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
   const [briefHour, setBriefHour] = useState(4);
   const [showAllTopics, setShowAllTopics] = useState(false);
 
@@ -34,6 +64,7 @@ export default function SettingsPage({
     status: string;
     preview_json: string | null;
     confirmed_at: string | null;
+    summary: SafariImportSummary | null;
   } | null>(null);
   const [safariPreview, setSafariPreview] = useState<{
     topDomains: Array<{ domain: string; count: number }>;
@@ -47,6 +78,31 @@ export default function SettingsPage({
   const [safariUploading, setSafariUploading] = useState(false);
   const [safariProcessing, setSafariProcessing] = useState(false);
   const [safariError, setSafariError] = useState<string | null>(null);
+
+  const loadSafariImport = useCallback(async () => {
+    try {
+      const res = await fetch("/api/history-imports");
+      const data = res.ok ? await res.json() : null;
+      if (data?.import) {
+        const imp = data.import;
+        setSafariImport(imp);
+        if (imp.status === "preview_ready" && imp.preview_json) {
+          try {
+            setSafariPreview(JSON.parse(imp.preview_json));
+          } catch {
+            setSafariPreview(null);
+          }
+        } else {
+          setSafariPreview(null);
+        }
+      } else {
+        setSafariImport(null);
+        setSafariPreview(null);
+      }
+    } catch {
+      // Ignore load errors; the rest of the page still works.
+    }
+  }, []);
 
   // Resolve search params once on client
   useEffect(() => {
@@ -88,46 +144,18 @@ export default function SettingsPage({
       })
       .catch(() => {});
 
-    // Load Safari import status
-    fetch("/api/history-imports")
+    void loadSafariImport();
+
+    fetch("/api/settings/profile")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data?.import) {
-          const imp = data.import;
-          setSafariImport(imp);
-          if (imp.status === "preview_ready" && imp.preview_json) {
-            try { setSafariPreview(JSON.parse(imp.preview_json)); } catch { /* ignore */ }
-          }
+        if (data) {
+          setProfileDisplayName(data.displayName ?? "");
+          setProfileTimezone(data.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
         }
       })
       .catch(() => {});
-  }, []);
-
-  // Helper: derive account status with display info
-  function getAccountStatus(account: LinkedAccountInfo | undefined) {
-    if (!account) return { label: "Disconnected", color: "gray" as const };
-    if (account.status === "active") return { label: "Connected", color: "green" as const };
-    if (account.status === "error" || account.sync_error_code) return { label: "Sync Error", color: "yellow" as const };
-    return { label: "Disconnected", color: "gray" as const };
-  }
-
-  function formatLastSync(at: string | null) {
-    if (!at) return null;
-    try {
-      const d = new Date(at);
-      return d.toLocaleString("en-US", {
-        month: "short", day: "numeric",
-        hour: "numeric", minute: "2-digit",
-      });
-    } catch {
-      return at;
-    }
-  }
-
-  // Helper: is a provider connected?
-  const isConnected = (provider: string) => {
-    return linkedAccounts.some((a) => a.provider === provider && a.status === "active");
-  };
+  }, [loadSafariImport]);
 
   // Topic toggle handler
   async function toggleTopic(topic: string, checked: boolean) {
@@ -153,6 +181,29 @@ export default function SettingsPage({
       // Silently fail – user can retry
     } finally {
       setSavingTopic(null);
+    }
+  }
+
+  // Profile edit handler
+  async function handleProfileSave() {
+    setSavingProfile(true);
+    setProfileSaved(false);
+    try {
+      const res = await fetch("/api/settings/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName: profileDisplayName,
+          timezone: profileTimezone,
+        }),
+      });
+      if (res.ok) {
+        setProfileSaved(true);
+        setTimeout(() => setProfileSaved(false), 3000);
+      }
+    } catch { /* ignore */ }
+    finally {
+      setSavingProfile(false);
     }
   }
 
@@ -225,6 +276,7 @@ export default function SettingsPage({
         status: "preview_ready",
         preview_json: null,
         confirmed_at: null,
+        summary: null,
       });
     } catch (err: unknown) {
       setSafariError(err instanceof Error ? err.message : "Unknown error");
@@ -245,8 +297,7 @@ export default function SettingsPage({
         const e = await res.json();
         throw new Error(e.error || "Confirm failed");
       }
-      setSafariImport((prev) => (prev ? { ...prev, status: "confirmed", confirmed_at: new Date().toISOString() } : null));
-      setSafariPreview(null);
+      await loadSafariImport();
     } catch (err: unknown) {
       setSafariError(err instanceof Error ? err.message : "Unknown error");
     }
@@ -263,107 +314,297 @@ export default function SettingsPage({
         const e = await res.json();
         throw new Error(e.error || "Delete failed");
       }
-      setSafariImport(null);
-      setSafariPreview(null);
+      await loadSafariImport();
     } catch (err: unknown) {
       setSafariError(err instanceof Error ? err.message : "Unknown error");
     }
   }
 
+  const activeAccountCount = linkedAccounts.filter(
+    (account) => account.status === "active"
+  ).length;
+  const briefHourLabel = `${briefHour.toString().padStart(2, "0")}:00`;
+  const profileReady = profileDisplayName.trim().length > 0;
+  const safariStatusLabel =
+    safariImport?.status === "confirmed"
+      ? "Imported"
+      : safariImport?.status === "preview_ready"
+        ? "Preview ready"
+        : "Pending";
+  const sectionLinks = [
+    { href: "#your-profile", label: "Profile" },
+    { href: "#appearance", label: "Appearance" },
+    { href: "#safari-history-import", label: "Safari import" },
+    { href: "#linked-accounts", label: "Accounts" },
+    { href: "#brief-delivery-time", label: "Brief time" },
+    { href: "#topic-preferences", label: "Topics" },
+    { href: "#privacy", label: "Privacy" },
+    { href: "#danger-zone", label: "Danger zone" },
+  ];
+
+  async function handleSignOut() {
+    try {
+      const browserClient = createClient();
+      await browserClient.auth.signOut();
+    } catch {
+      // ignore
+    }
+
+    try {
+      await fetch("/api/auth/sign-out", { method: "POST" });
+    } catch {
+      // ignore
+    }
+
+    window.location.href = "/login";
+  }
+
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Nav */}
-      <header className="border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-10 bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur">
-        <nav className="max-w-3xl mx-auto flex items-center justify-between px-6 py-3">
-          <Link href="/" className="text-sm font-semibold hover:underline">
-            AI News Brief
-          </Link>
-          <div className="flex gap-4 text-sm">
-            <Link
-              href="/feed"
-              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-            >
-              Feed
-            </Link>
-            <button
-              onClick={async () => {
-                try {
-                  // Clear client-side session first
-                  const browserClient = createClient();
-                  await browserClient.auth.signOut();
-                } catch {
-                  // ignore — proceed with server sign-out anyway
-                }
-                try {
-                  await fetch("/api/auth/sign-out", { method: "POST" });
-                } catch {
-                  // ignore
-                }
-                window.location.href = "/login";
-              }}
-              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 inline-flex items-center gap-1"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Sign out
-            </button>
-          </div>
-        </nav>
-      </header>
-
-      <main className="flex-1 max-w-3xl mx-auto w-full px-6 py-8">
-        <h1 className="text-2xl font-bold mb-2">Settings</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-8">
-          Manage your linked accounts, topic preferences, and privacy settings.
-        </p>
-
-        {/* Flash messages */}
-        {connectedParam && (
-          <div className="mb-6 p-4 rounded-xl bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-900 text-sm text-green-800 dark:text-green-200">
-            Connected to {connectedParam === "x" ? "X / Twitter" : "Google"}{" "}
-            successfully! Your signals will now influence your daily briefing.
-          </div>
-        )}
-        {errorParam && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-200">
-            Connection failed: {decodeURIComponent(errorParam)}
-          </div>
-        )}
-        {connectError && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-200">
-            {connectError}
-            <button
-              onClick={() => setConnectError(null)}
-              className="ml-2 underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Safari History Import */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Safari History Import</h2>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-              Strengthen your profile with Safari history. Safari ZIP only — passwords, cards, bookmarks ignored. Raw file deleted after processing.
+    <PageShell
+      shellClassName="lg:grid-cols-[270px_minmax(0,1fr)]"
+      contentClassName="space-y-5"
+      sidebar={
+        <SettingsSidebar
+          activeAccountCount={activeAccountCount}
+          briefHourLabel={briefHourLabel}
+          profileReady={profileReady}
+          safariStatusLabel={safariStatusLabel}
+          topicCount={topics.size}
+          topicHighlights={Array.from(topics)}
+        />
+      }
+    >
+      <ShellHero className="px-6 py-6 sm:px-8 sm:py-7">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-panel-label shadow-sm">
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+              Settings
+            </div>
+            <h1 className="mt-4 text-[clamp(2rem,3.8vw,3.1rem)] font-semibold tracking-tight text-strong">
+              Control your briefing, connections, and privacy.
+            </h1>
+            <p className="text-muted mt-3 max-w-2xl text-base leading-relaxed sm:text-lg">
+              Manage your linked accounts, topic preferences, Safari import,
+              and delivery time from one place.
             </p>
-            <SafariImportSection
-              safariImport={safariImport}
-              safariPreview={safariPreview}
-              uploading={safariUploading}
-              processing={safariProcessing}
-              error={safariError}
-              onUpload={(file) => handleSafariUpload(file)}
-              onConfirm={handleSafariConfirm}
-              onDelete={handleSafariDelete}
-              onError={setSafariError}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:w-[320px]">
+            <StatBlock
+              label="Accounts"
+              value={activeAccountCount}
+              detail="linked sources"
+            />
+            <StatBlock
+              label="Topics"
+              value={topics.size}
+              detail="active now"
             />
           </div>
-        </section>
+        </div>
+      </ShellHero>
 
-        {/* Linked Accounts */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Linked Accounts</h2>
-          <div className="space-y-3">
+      <ShellSoftCard className="p-2">
+        <div className="flex gap-2 overflow-x-auto">
+          {sectionLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-strong inline-flex shrink-0 items-center rounded-full border px-4 py-2 text-sm font-medium transition hover:-translate-y-0.5 hover:bg-white/70 hover:shadow-sm dark:hover:bg-zinc-800/80"
+              style={{
+                borderColor: "var(--surface-border-white)",
+                backgroundColor: "var(--surface-card-bg)",
+              }}
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+      </ShellSoftCard>
+
+      {connectedParam && (
+        <div
+          className="motion-fade-up rounded-[var(--radius-card)] border px-4 py-4 text-sm text-emerald-700 shadow-sm dark:text-emerald-200"
+          style={{
+            background: "rgba(16,185,129,0.10)",
+            borderColor: "rgba(16,185,129,0.22)",
+          }}
+        >
+          Connected to {connectedParam === "x" ? "X / Twitter" : "Google"}{" "}
+          successfully! Your signals will now influence your daily briefing.
+        </div>
+      )}
+      {errorParam && (
+        <div
+          className="motion-fade-up rounded-[var(--radius-card)] border px-4 py-4 text-sm text-red-700 shadow-sm dark:text-red-200"
+          style={{
+            background: "rgba(244,63,94,0.10)",
+            borderColor: "rgba(239,68,68,0.22)",
+          }}
+        >
+          Connection failed: {decodeURIComponent(errorParam)}
+        </div>
+      )}
+      {connectError && (
+        <div
+          className="motion-fade-up rounded-[var(--radius-card)] border px-4 py-4 text-sm text-red-700 shadow-sm dark:text-red-200"
+          style={{
+            background: "rgba(244,63,94,0.10)",
+            borderColor: "rgba(239,68,68,0.22)",
+          }}
+        >
+          {connectError}
+          <button onClick={() => setConnectError(null)} className="ml-2 underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      <section id="your-profile" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-950 shadow-sm dark:bg-zinc-100 dark:text-zinc-950">
+              <User className="h-6 w-6 text-sky-600" />
+            </div>
+            <div>
+              <p className="text-strong text-sm font-medium">
+                Display name &amp; timezone
+              </p>
+              <p className="text-muted text-xs">
+                Customize how your briefing addresses you
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="profile-display-name"
+                className="text-panel-label mb-1.5 block text-sm font-medium"
+              >
+                Display Name
+              </label>
+              <input
+                id="profile-display-name"
+                type="text"
+                value={profileDisplayName}
+                onChange={(e) => setProfileDisplayName(e.target.value)}
+                placeholder="How should we greet you?"
+                maxLength={50}
+                className="w-full rounded-[1.15rem] border px-4 py-3 text-sm text-strong shadow-sm outline-none transition placeholder:text-subtle focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/20"
+                style={{
+                  backgroundColor: "var(--surface-status-bg)",
+                  borderColor: "var(--surface-border-white)",
+                }}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="profile-timezone"
+                className="text-panel-label mb-1.5 block text-sm font-medium"
+              >
+                Timezone
+              </label>
+              <select
+                id="profile-timezone"
+                value={profileTimezone}
+                onChange={(e) => setProfileTimezone(e.target.value)}
+                className="w-full rounded-[1.15rem] border px-4 py-3 text-sm text-strong shadow-sm outline-none transition focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/20"
+                style={{
+                  backgroundColor: "var(--surface-status-bg)",
+                  borderColor: "var(--surface-border-white)",
+                }}
+              >
+                {TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={handleProfileSave}
+                disabled={savingProfile}
+                className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+              >
+                {savingProfile ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-950/20 border-t-zinc-950" />
+                    Saving&hellip;
+                  </>
+                ) : profileSaved ? (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-500" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Edit3 className="h-4 w-4" />
+                    Save Profile
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </ShellCard>
+      </section>
+
+      <section id="appearance" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-strong text-xl font-semibold tracking-tight">
+              Appearance
+            </h2>
+            <p className="text-muted mt-1 text-sm leading-relaxed">
+              Switch between light and dark mode. Your preference syncs across
+              devices.
+            </p>
+          </div>
+          <ThemeToggle />
+        </ShellCard>
+      </section>
+
+      <section id="safari-history-import" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-strong text-xl font-semibold tracking-tight">
+              Safari History Import
+            </h2>
+            <p className="text-muted mt-1 text-sm leading-relaxed">
+              Strengthen your profile with Safari history. Safari ZIP only —
+              passwords, cards, bookmarks ignored. Raw file deleted after
+              processing.
+            </p>
+          </div>
+          <SafariImportSection
+            safariImport={safariImport}
+            safariPreview={safariPreview}
+            uploading={safariUploading}
+            processing={safariProcessing}
+            error={safariError}
+            onUpload={(file) => handleSafariUpload(file)}
+            onConfirm={handleSafariConfirm}
+            onDelete={handleSafariDelete}
+            onError={setSafariError}
+          />
+        </ShellCard>
+      </section>
+
+      <section id="linked-accounts" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-strong text-xl font-semibold tracking-tight">
+              Linked Accounts
+            </h2>
+            <p className="text-muted mt-1 text-sm leading-relaxed">
+              Connected sources and future integrations will live here.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <ComingSoonCard
               Icon={XIcon}
               label="X / Twitter"
@@ -385,268 +626,327 @@ export default function SettingsPage({
               description="Not yet supported — coming soon"
             />
           </div>
-        </section>
+        </ShellCard>
+      </section>
 
-        {/* Brief Ready Hour */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Brief Delivery Time</h2>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-              Set the local hour when your daily briefing will be ready. Your brief is generated shortly before this time.
+      <section id="brief-delivery-time" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-strong text-xl font-semibold tracking-tight">
+              Brief Delivery Time
+            </h2>
+            <p className="text-muted mt-1 text-sm leading-relaxed">
+              Set the local hour when your daily briefing will be ready. Your
+              brief is generated shortly before this time.
             </p>
-            <div className="flex items-center gap-3">
-              <label htmlFor="brief-hour" className="text-sm text-zinc-600 dark:text-zinc-400">
-                Brief ready at:
-              </label>
-              <select
-                id="brief-hour"
-                value={briefHour}
-                onChange={(e) => handleBriefHourChange(parseInt(e.target.value, 10))}
-                className="rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {Array.from({ length: 24 }, (_, h) => {
-                  const display12 = h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`;
-                  return (
-                    <option key={h} value={h}>
-                      {h}:00 {display12}
-                    </option>
-                  );
-                })}
-              </select>
-              <span className="text-xs text-zinc-400">local time</span>
-            </div>
           </div>
-        </section>
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="brief-hour" className="text-muted text-sm">
+              Brief ready at:
+            </label>
+            <select
+              id="brief-hour"
+              value={briefHour}
+              onChange={(e) => handleBriefHourChange(parseInt(e.target.value, 10))}
+              className="rounded-[1.15rem] border px-4 py-3 text-sm text-strong shadow-sm outline-none transition focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/20"
+              style={{
+                backgroundColor: "var(--surface-status-bg)",
+                borderColor: "var(--surface-border-white)",
+              }}
+            >
+              {Array.from({ length: 24 }, (_, h) => {
+                const display12 =
+                  h === 0
+                    ? "12 AM"
+                    : h < 12
+                      ? `${h} AM`
+                      : h === 12
+                        ? "12 PM"
+                        : `${h - 12} PM`;
+                return (
+                  <option key={h} value={h}>
+                    {h}:00 {display12}
+                  </option>
+                );
+              })}
+            </select>
+            <span className="text-muted text-xs">local time</span>
+          </div>
+        </ShellCard>
+      </section>
 
-        {/* Topic Preferences */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Topic Preferences</h2>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
+      <section id="topic-preferences" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-strong text-xl font-semibold tracking-tight">
+              Topic Preferences
+            </h2>
+            <p className="text-muted mt-1 text-sm leading-relaxed">
               These topics influence which articles appear in your briefing. We
               auto-detect interests from your linked accounts. You can also
               adjust weights manually.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {TOPIC_TAXONOMY.map((topic) => {
-                const display = topic.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                if (!showAllTopics && !topics.has(topic)) return null;
-                return (
-                  <TopicBadge
-                    key={topic}
-                    topic={topic}
-                    checked={topics.has(topic)}
-                    disabled={savingTopic === topic}
-                    onChange={toggleTopic}
-                  />
-                );
-              })}
-            </div>
-            {!showAllTopics && (
-              <button
-                onClick={() => setShowAllTopics(true)}
-                className="mt-3 text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline"
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {TOPIC_TAXONOMY.map((topic) => {
+              if (!showAllTopics && !topics.has(topic)) return null;
+              return (
+                <TopicBadge
+                  key={topic}
+                  topic={topic}
+                  checked={topics.has(topic)}
+                  disabled={savingTopic === topic}
+                  onChange={toggleTopic}
+                />
+              );
+            })}
+          </div>
+          {!showAllTopics && (
+            <button
+              onClick={() => setShowAllTopics(true)}
+              className="text-muted mt-3 text-sm underline decoration-zinc-400 underline-offset-4 transition hover:text-strong"
+            >
+              Show all {TOPIC_TAXONOMY.length} topics
+            </button>
+          )}
+        </ShellCard>
+      </section>
+
+      <section id="privacy" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-strong text-xl font-semibold tracking-tight">
+              Privacy
+            </h2>
+          </div>
+          <div className="space-y-3 text-sm text-muted">
+            <p>
+              We encrypt your OAuth tokens using AES-256-GCM at rest. Your
+              tokens are never stored in plaintext.
+            </p>
+            <p>
+              Disconnecting an account immediately purges all encrypted tokens
+              associated with it. Your personalization signals from that
+              account will stop being used, though historical feedback data is
+              retained for quality purposes.
+            </p>
+            <p>
+              We do not sell, share, or resell your data. Your reading
+              interests are used solely to curate your briefing.
+            </p>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Link
+                href="/privacy"
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition hover:-translate-y-0.5 hover:bg-white/80"
               >
-                Show all {TOPIC_TAXONOMY.length} topics
-              </button>
-            )}
-          </div>
-        </section>
-
-        {/* Privacy */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Privacy</h2>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-            <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-              <p>
-                We encrypt your OAuth tokens using AES-256-GCM at rest. Your
-                tokens are never stored in plaintext.
-              </p>
-              <p>
-                Disconnecting an account immediately purges all encrypted tokens
-                associated with it. Your personalization signals from that
-                account will stop being used, though historical feedback data is
-                retained for quality purposes.
-              </p>
-              <p>
-                We do not sell, share, or resell your data. Your reading
-                interests are used solely to curate your briefing.
-              </p>
-              <div className="flex gap-4 pt-2">
-                <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">
-                  Privacy Policy →
-                </Link>
-                <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">
-                  Terms of Service →
-                </Link>
-              </div>
+                Privacy Policy
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/terms"
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition hover:-translate-y-0.5 hover:bg-white/80"
+              >
+                Terms of Service
+                <ChevronRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
-        </section>
+        </ShellCard>
+      </section>
 
-        {/* Delete Account */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4 text-red-600 dark:text-red-400">
-            Danger Zone
-          </h2>
-          <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-white dark:bg-zinc-900 p-6">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+      <section id="danger-zone" className="scroll-mt-8">
+        <ShellCard
+          className="border border-red-500/20 bg-[rgba(239,68,68,0.06)] p-6 shadow-[var(--shadow-soft)]"
+        >
+          <div className="mb-5">
+            <h2 className="text-xl font-semibold tracking-tight text-red-600 dark:text-red-300">
+              Danger Zone
+            </h2>
+            <p className="text-muted mt-1 text-sm leading-relaxed">
               Permanently delete your account and all associated data. This
               includes your profile, linked accounts, topic preferences, daily
               briefs, interest signals, and feedback events. This action cannot
               be undone.
             </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleSignOut}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition hover:-translate-y-0.5 hover:bg-white/80"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
             <DeleteAccountButton />
           </div>
-        </section>
-      </main>
+        </ShellCard>
+      </section>
+    </PageShell>
+  );
+}
+
+function StatBlock({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+}) {
+  return (
+    <div
+      className="rounded-[1.35rem] border p-4"
+      style={{
+        background: "var(--surface-card-bg-strong)",
+        borderColor: "var(--surface-border-white)",
+      }}
+    >
+      <p className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.26em]">
+        {label}
+      </p>
+      <p className="text-strong mt-2 text-2xl font-semibold tracking-tight">
+        {value}
+      </p>
+      {detail ? <p className="text-muted mt-1 text-xs">{detail}</p> : null}
     </div>
   );
 }
 
-function ProviderCard({
-  provider,
-  label,
-  connected,
-  account,
-  onDisconnected,
-  getStatus,
-  formatLastSync,
-  onConnectError,
+function SettingsSidebar({
+  activeAccountCount,
+  briefHourLabel,
+  profileReady,
+  safariStatusLabel,
+  topicCount,
+  topicHighlights,
 }: {
-  provider: string;
-  label: string;
-  connected: boolean;
-  account?: LinkedAccountInfo;
-  onDisconnected: () => void;
-  getStatus: (acc: LinkedAccountInfo | undefined) => { label: string; color: "green" | "yellow" | "gray" };
-  formatLastSync: (at: string | null) => string | null;
-  onConnectError?: (msg: string) => void;
+  activeAccountCount: number;
+  briefHourLabel: string;
+  profileReady: boolean;
+  safariStatusLabel: string;
+  topicCount: number;
+  topicHighlights: string[];
 }) {
-  const [connectError, setConnectError] = useState<string | null>(null);
-  const IconComponent = provider === "x" ? XIcon : Wifi;
-  const { label: statusLabel, color } = getStatus(account);
-  const lastSyncStr = formatLastSync(account?.last_sync_at ?? null);
-
-  const badgeColors: Record<string, { bg: string; text: string; dot: string }> = {
-    green: {
-      bg: "bg-green-100 dark:bg-green-900",
-      text: "text-green-700 dark:text-green-400",
-      dot: "bg-green-500",
-    },
-    yellow: {
-      bg: "bg-yellow-100 dark:bg-yellow-900",
-      text: "text-yellow-700 dark:text-yellow-400",
-      dot: "bg-yellow-500",
-    },
-    gray: {
-      bg: "bg-zinc-100 dark:bg-zinc-800",
-      text: "text-zinc-600 dark:text-zinc-400",
-      dot: "bg-zinc-400",
-    },
-  };
-
-  const badge = badgeColors[color];
-
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-      <div className="flex items-center gap-3">
-        <div
-          className={`p-2 rounded-full ${
-            connected
-              ? "bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400"
-              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
-          }`}
-        >
-          <IconComponent className="w-5 h-5" />
-        </div>
-        <div>
-          <p className="font-medium text-sm">{label}</p>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${badge.bg} ${badge.text}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-              {statusLabel}
-            </span>
-            {lastSyncStr && (
-              <span className="text-xs text-zinc-400">
-                Last synced: {lastSyncStr}
-              </span>
-            )}
+    <div className="hidden lg:block">
+      <div className="sticky top-0 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-hidden rounded-[var(--radius-hero)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] p-5 shadow-[var(--shadow-hero)] backdrop-blur-[var(--glass-panel-blur)]">
+        <div className="inline-flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white shadow-[0_16px_30px_-18px_rgba(15,23,42,0.9)] dark:bg-zinc-100 dark:text-zinc-950">
+            <Newspaper className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-strong text-lg font-semibold tracking-tight">
+              AI News Digest
+            </h2>
+            <p className="text-muted text-sm">Settings hub</p>
           </div>
         </div>
-      </div>
-      {connected ? (
-        <button
-          onClick={async () => {
-            const res = await fetch(`/api/accounts/${provider}`, {
-              method: "DELETE",
-            });
-            if (res.ok) {
-              onDisconnected();
-            }
-          }}
-          className="px-4 py-2 text-sm rounded-full border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
-        >
-          Disconnect
-        </button>
-      ) : (
-        <div>
-          <ConnectButton
-            provider={provider}
-            onError={(msg) => {
-              setConnectError(msg);
-              onConnectError?.(msg);
-            }}
+
+        <div className="grid grid-cols-2 gap-3">
+          <StatBlock
+            label="Accounts"
+            value={activeAccountCount}
+            detail="linked sources"
           />
-          {connectError && (
-            <p className="mt-2 text-xs text-red-500 dark:text-red-400">{connectError}</p>
-          )}
+          <StatBlock label="Topics" value={topicCount} detail="active now" />
         </div>
-      )}
+
+        <nav className="space-y-2">
+          {sidebarLinks.map((link) => {
+            const active = link.href === "/settings";
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={`group flex items-center rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                  active
+                    ? "bg-zinc-100 text-zinc-950 shadow-[0_18px_36px_-24px_rgba(15,23,42,0.9)] dark:bg-zinc-100 dark:text-zinc-950"
+                    : "text-zinc-950 hover:-translate-y-0.5 hover:bg-white/90 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                }`}
+                style={{
+                  borderColor: active
+                    ? "rgba(15,23,42,0.05)"
+                    : "var(--surface-border-white)",
+                  backgroundColor: active ? undefined : "var(--surface-card-bg)",
+                }}
+              >
+                {link.label}
+                <ChevronRight
+                  className={`ml-auto h-4 w-4 transition ${
+                    active
+                      ? "opacity-80"
+                      : "opacity-35 group-hover:opacity-60"
+                  }`}
+                />
+              </Link>
+            );
+          })}
+        </nav>
+
+        <section
+          className="rounded-[1.4rem] border p-4"
+          style={{
+            background: "var(--surface-soft-panel)",
+            borderColor: "var(--surface-border-white)",
+          }}
+        >
+          <div className="text-panel-label flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.26em]">
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            Personalization
+          </div>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-muted">Profile</dt>
+              <dd className="text-strong font-medium">
+                {profileReady ? "Ready" : "Unset"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-muted">Brief time</dt>
+              <dd className="text-strong font-medium">{briefHourLabel}</dd>
+            </div>
+          </dl>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span
+              className="rounded-full border px-3 py-1 text-[11px] font-medium text-muted"
+              style={{
+                background: "rgba(56, 189, 248, 0.08)",
+                borderColor: "rgba(56, 189, 248, 0.16)",
+              }}
+            >
+              {safariStatusLabel}
+            </span>
+            <span
+              className="rounded-full border px-3 py-1 text-[11px] font-medium text-muted"
+              style={{
+                background: "rgba(56, 189, 248, 0.08)",
+                borderColor: "rgba(56, 189, 248, 0.16)",
+              }}
+            >
+              {topicCount} topics
+            </span>
+            {topicHighlights.slice(0, 2).map((topic) => (
+              <span
+                key={topic}
+                className="rounded-full border px-3 py-1 text-[11px] font-medium text-muted"
+                style={{
+                  background: "rgba(56, 189, 248, 0.08)",
+                  borderColor: "rgba(56, 189, 248, 0.16)",
+                }}
+              >
+                {topic.replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        <div className="mt-auto border-t pt-4" style={{ borderColor: "var(--surface-border-subtle)" }}>
+          <ThemeToggle />
+        </div>
+      </div>
     </div>
-  );
-}
-
-function ConnectButton({
-  provider,
-  onError,
-}: {
-  provider: string;
-  onError?: (msg: string) => void;
-}) {
-  const [loading, setLoading] = useState(false);
-
-  return (
-    <button
-      disabled={loading}
-      onClick={async () => {
-        setLoading(true);
-        try {
-          const res = await fetch(`/api/accounts/${provider}/start`, {
-            method: "POST",
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => null);
-            const msg = data?.error ?? `Server returned ${res.status}`;
-            onError?.(msg);
-            return;
-          }
-          const data = await res.json();
-          if (data.authUrl) {
-            window.location.href = data.authUrl;
-          } else {
-            onError?.("No auth URL returned");
-          }
-        } catch {
-          onError?.("Network error");
-        } finally {
-          setLoading(false);
-        }
-      }}
-      className="px-4 py-2 text-sm rounded-full bg-zinc-900 dark:bg-white dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {loading ? "Connecting…" : "Connect"}
-    </button>
   );
 }
 
@@ -660,17 +960,23 @@ function ComingSoonCard({
   description: string;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-5 opacity-60">
+    <div
+      className="flex items-center justify-between rounded-[var(--radius-card)] border border-dashed p-5 opacity-85 shadow-sm"
+      style={{
+        borderColor: "var(--surface-border-subtle)",
+        backgroundColor: "var(--surface-card-bg)",
+      }}
+    >
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600">
-          <Icon className="w-5 h-5" />
+        <div className="rounded-2xl bg-zinc-100 p-2 text-zinc-950 shadow-sm dark:bg-zinc-100 dark:text-zinc-950">
+          <Icon className="h-5 w-5 text-sky-600" />
         </div>
         <div>
-          <p className="font-medium text-sm text-zinc-500 dark:text-zinc-500">{label}</p>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500">{description}</p>
+          <p className="text-strong text-sm font-medium">{label}</p>
+          <p className="text-muted text-xs">{description}</p>
         </div>
       </div>
-      <span className="text-xs text-zinc-400 dark:text-zinc-600 italic">Coming soon</span>
+      <span className="text-muted text-xs italic">Coming soon</span>
     </div>
   );
 }
@@ -691,15 +997,25 @@ function TopicBadge({
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
-    <label className="flex items-center gap-2 text-sm cursor-pointer group">
+    <label
+      className="group flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5"
+      style={{
+        backgroundColor: checked
+          ? "rgba(56, 189, 248, 0.12)"
+          : "var(--surface-card-bg)",
+        borderColor: checked
+          ? "rgba(56, 189, 248, 0.28)"
+          : "var(--surface-border-white)",
+      }}
+    >
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(topic, e.target.checked)}
-        className="rounded border-zinc-300 dark:border-zinc-600 accent-blue-600"
+        className="rounded border-zinc-300 accent-sky-600"
       />
-      <span className="group-hover:underline">{formatted}</span>
+      <span className="text-strong group-hover:text-strong">{formatted}</span>
     </label>
   );
 }
@@ -726,7 +1042,7 @@ function DeleteAccountButton() {
         setIsPending(false);
         setConfirmed(false);
       }
-    } catch (err) {
+    } catch {
       setError("Network error. Please try again.");
       setIsPending(false);
       setConfirmed(false);
@@ -738,23 +1054,21 @@ function DeleteAccountButton() {
       {!confirmed ? (
         <button
           onClick={handleDelete}
-          className="px-4 py-2 text-sm rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+          className="rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-400"
         >
           Delete Account
         </button>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+          <p className="text-sm font-semibold text-red-700 dark:text-red-300">
             Are you sure? Click below to permanently delete your account.
           </p>
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
           <div className="flex gap-3">
             <button
               onClick={handleDelete}
               disabled={isPending}
-              className="px-4 py-2 text-sm rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+              className="rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-400 disabled:opacity-50"
             >
               {isPending ? "Deleting..." : "Yes, Delete Account"}
             </button>
@@ -764,7 +1078,7 @@ function DeleteAccountButton() {
                 setError(null);
               }}
               disabled={isPending}
-              className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              className="rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition-colors hover:bg-white/80 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -774,8 +1088,6 @@ function DeleteAccountButton() {
     </div>
   );
 }
-
-// ── Safari Import UI Component ──────────────────────────────────────────────
 
 interface SafariPreviewData {
   topDomains: Array<{ domain: string; count: number }>;
@@ -803,6 +1115,7 @@ function SafariImportSection({
     status: string;
     preview_json: string | null;
     confirmed_at: string | null;
+    summary: SafariImportSummary | null;
   } | null;
   safariPreview: SafariPreviewData | null;
   uploading: boolean;
@@ -826,31 +1139,111 @@ function SafariImportSection({
     e.target.value = "";
   };
 
-  // Confirmed — showing management controls
   if (safariImport?.status === "confirmed") {
+    const summary = safariImport.summary;
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
           </svg>
           <span className="font-medium">History imported successfully</span>
         </div>
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+        <p className="text-muted text-xs">
           Safari history signals are influencing your daily brief.
         </p>
-        <div className="flex gap-3 pt-2">
+        {summary ? (
+          <div
+            className="rounded-[1.25rem] border p-4 shadow-sm"
+            style={{
+              backgroundColor: "var(--surface-status-bg)",
+              borderColor: "var(--surface-border-white)",
+            }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="max-w-2xl">
+                <p className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.26em]">
+                  Safari profile summary
+                </p>
+                <p className="text-strong mt-2 text-sm leading-6">
+                  {summary.behaviorBlurb}
+                </p>
+              </div>
+              <div
+                className="rounded-full border px-3 py-1 text-xs font-medium text-strong"
+                style={{
+                  backgroundColor: "var(--surface-card-bg)",
+                  borderColor: "var(--surface-border-white)",
+                }}
+              >
+                {summary.acceptedCount.toLocaleString()} accepted visits
+              </div>
+            </div>
+
+            {summary.topTopics.length > 0 ? (
+              <div className="mt-4">
+                <h3 className="text-subtle mb-2 text-xs font-semibold uppercase tracking-[0.22em]">
+                  Top interests
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {summary.topTopics.map((item) => (
+                    <span
+                      key={item.topic}
+                      className="rounded-full border px-2.5 py-1 text-xs text-strong shadow-sm"
+                      style={{
+                        backgroundColor: "var(--surface-card-bg)",
+                        borderColor: "var(--surface-border-white)",
+                      }}
+                    >
+                      {humanizeSafariTopic(item.topic)} ({item.count})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {summary.topDomains.length > 0 ? (
+              <div className="mt-4">
+                <h3 className="text-subtle mb-2 text-xs font-semibold uppercase tracking-[0.22em]">
+                  Top domains
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {summary.topDomains.map((item) => (
+                    <span
+                      key={item.domain}
+                      className="rounded-full border px-2.5 py-1 text-xs text-strong shadow-sm"
+                      style={{
+                        backgroundColor: "var(--surface-card-bg)",
+                        borderColor: "var(--surface-border-white)",
+                      }}
+                    >
+                      {item.domain}
+                      <span className="text-muted"> ({item.count})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-3 pt-2">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 text-sm rounded-full bg-zinc-900 dark:bg-white dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
+            className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"
           >
             Replace Import
           </button>
           <button
             onClick={onDelete}
-            className="px-4 py-2 text-sm rounded-full border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors flex items-center gap-1"
+            className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-[rgba(239,68,68,0.08)] px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-[rgba(239,68,68,0.12)] dark:text-red-300"
           >
-            <Trash2 className="w-4 h-4" /> Delete History Signals
+            <Trash2 className="h-4 w-4" />
+            Delete History Signals
           </button>
           <input
             ref={fileInputRef}
@@ -864,7 +1257,6 @@ function SafariImportSection({
     );
   }
 
-  // Preview ready — show aggregated summary
   if (safariImport?.status === "preview_ready" && safariPreview) {
     const preview = safariPreview;
     const topTopics = Object.entries(preview.topicCounts)
@@ -874,27 +1266,59 @@ function SafariImportSection({
 
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-center">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{preview.totalVisits.toLocaleString()}</div>
-            <div className="text-xs text-zinc-400">Total Visits</div>
+        <div className="grid gap-3 text-sm sm:grid-cols-3">
+          <div
+            className="rounded-[1.25rem] border px-3 py-3 text-center shadow-sm"
+            style={{
+              backgroundColor: "var(--surface-card-bg)",
+              borderColor: "var(--surface-border-white)",
+            }}
+          >
+            <div className="text-strong text-lg font-semibold">
+              {preview.totalVisits.toLocaleString()}
+            </div>
+            <div className="text-muted text-xs">Total Visits</div>
           </div>
-          <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-center">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{preview.acceptedCount.toLocaleString()}</div>
-            <div className="text-xs text-zinc-400">Accepted</div>
+          <div
+            className="rounded-[1.25rem] border px-3 py-3 text-center shadow-sm"
+            style={{
+              backgroundColor: "var(--surface-card-bg)",
+              borderColor: "var(--surface-border-white)",
+            }}
+          >
+            <div className="text-strong text-lg font-semibold">
+              {preview.acceptedCount.toLocaleString()}
+            </div>
+            <div className="text-muted text-xs">Accepted</div>
           </div>
-          <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-center">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{preview.rejectedCount.toLocaleString()}</div>
-            <div className="text-xs text-zinc-400">Rejected</div>
+          <div
+            className="rounded-[1.25rem] border px-3 py-3 text-center shadow-sm"
+            style={{
+              backgroundColor: "var(--surface-card-bg)",
+              borderColor: "var(--surface-border-white)",
+            }}
+          >
+            <div className="text-strong text-lg font-semibold">
+              {preview.rejectedCount.toLocaleString()}
+            </div>
+            <div className="text-muted text-xs">Rejected</div>
           </div>
         </div>
 
         <div>
-          <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Top Domains</h3>
+          <h3 className="text-muted mb-2 text-sm font-medium">Top Domains</h3>
           <div className="flex flex-wrap gap-2">
             {preview.topDomains.slice(0, 10).map((d) => (
-              <span key={d.domain} className="text-xs px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                {d.domain} <span className="text-zinc-400">({d.count})</span>
+              <span
+                key={d.domain}
+                className="rounded-full border px-2 py-1 text-xs text-strong shadow-sm"
+                style={{
+                  backgroundColor: "var(--surface-card-bg)",
+                  borderColor: "var(--surface-border-white)",
+                }}
+              >
+                {d.domain}{" "}
+                <span className="text-muted">({d.count})</span>
               </span>
             ))}
           </div>
@@ -902,12 +1326,19 @@ function SafariImportSection({
 
         {topTopics.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Inferred Topics</h3>
+            <h3 className="text-muted mb-2 text-sm font-medium">
+              Inferred Topics
+            </h3>
             <div className="flex flex-wrap gap-2">
               {topTopics.map((t) => {
-                const display = t.topic.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                const display = t.topic
+                  .replace(/_/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase());
                 return (
-                  <span key={t.topic} className="text-xs px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
+                  <span
+                    key={t.topic}
+                    className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-xs text-sky-700 dark:text-sky-200"
+                  >
                     {display}
                   </span>
                 );
@@ -916,22 +1347,23 @@ function SafariImportSection({
           </div>
         )}
 
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Date range: {new Date(preview.dateRange.start).toLocaleDateString()} → {new Date(preview.dateRange.end).toLocaleDateString()}
+        <p className="text-muted text-xs">
+          Date range: {new Date(preview.dateRange.start).toLocaleDateString()} →{" "}
+          {new Date(preview.dateRange.end).toLocaleDateString()}
         </p>
 
-        {error && (<p className="text-sm text-red-600 dark:text-red-400">{error}</p>)}
+        {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-wrap gap-3 pt-2">
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"
           >
             Confirm Import
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition-colors hover:bg-white/80"
           >
             Cancel / Re-upload
           </button>
@@ -947,29 +1379,29 @@ function SafariImportSection({
     );
   }
 
-  // No import yet — upload button
   return (
     <div className="space-y-4">
       {uploading && (
-        <div className="flex items-center gap-3 text-sm text-zinc-500">
-          <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
+        <div className="flex items-center gap-3 text-sm text-muted">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-sky-500" />
           <span>Uploading...</span>
         </div>
       )}
       {processing && (
-        <div className="flex items-center gap-3 text-sm text-zinc-500">
-          <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
+        <div className="flex items-center gap-3 text-sm text-muted">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-sky-500" />
           <span>Processing your Safari history...</span>
         </div>
       )}
-      {error && (<p className="text-sm text-red-600 dark:text-red-400">{error}</p>)}
+      {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
 
       {!uploading && !processing && (
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="px-4 py-2 text-sm rounded-full bg-zinc-900 dark:bg-white dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors flex items-center gap-2"
+          className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"
         >
-          <Globe className="w-4 h-4" /> Upload Safari Export ZIP
+          <Globe className="h-4 w-4" />
+          Upload Safari Export ZIP
         </button>
       )}
 

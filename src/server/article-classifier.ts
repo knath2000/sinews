@@ -1,6 +1,7 @@
 import { OpenAI } from "openai";
 import { db } from "./db/client";
 import { TOPIC_TAXONOMY, TopicTaxonomy } from "./taxonomy";
+import { logError } from "./error-logger";
 
 let client: OpenAI | null = null;
 
@@ -149,7 +150,11 @@ export async function classifyUnannotatedArticles(): Promise<number> {
       });
       annotated++;
     } catch (err) {
-      console.error(`Failed to classify article ${article.id}:`, err);
+      logError("article-classification", err, {
+        articleId: article.id,
+        title: article.title,
+        source: article.source_name,
+      });
     }
   }
 

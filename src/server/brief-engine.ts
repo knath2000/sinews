@@ -1,11 +1,16 @@
 import OpenAI from "openai";
 import { db } from "./db/client";
-import { SIGNAL_WEIGHTS, TOPIC_TAXONOMY } from "./taxonomy";
+import { SIGNAL_WEIGHTS } from "./taxonomy";
 import { isFeatureEnabled } from "./feature-flags";
 import { HISTORY_IMPORT_DOMAIN_WEIGHT_CAP } from "@/lib/constants";
 import { fetchAllRSSFeeds } from "./news-fetcher";
+import { logError } from "./error-logger";
+import { isFixtureArticle } from "./fixture-utils";
 import type { RawArticle } from "./article-loader";
+import { normalizePublicImageUrl } from "./url-utils";
 import { classifyArticle } from "./article-classifier";
+import { sanitizeFeedSnippet, sanitizeFeedTitle } from "./text-utils";
+import { buildBriefItemProvenance } from "@/lib/safari-insights";
 
 const SUMMARY_MODEL =
   process.env.OPENAI_SUMMARY_MODEL || "gpt-4o-mini";
@@ -53,9 +58,15 @@ export interface GeneratedBriefItem {
 export async function buildUserProfile(userId: string): Promise<{
   topicWeights: Map<string, number>;
   entityWeights: Map<string, number>;
+  safariHistoryImport: {
+    topicWeights: Map<string, number>;
+    topicDomainWeights: Map<string, Map<string, number>>;
+  };
 }> {
   const topicWeights = new Map<string, number>();
   const entityWeights = new Map<string, number>();
+  const safariTopicDomainRawWeights = new Map<string, Map<string, number>>();
+  const now = new Date();
 
   // Weighted topic preferences
   const preferences = await db.user_topic_preferences.findMany({
@@ -69,7 +80,10 @@ export async function buildUserProfile(userId: string): Promise<{
 
   // Interest signals with signal strength and weight
   const signals = await db.interest_signals.findMany({
-    where: { user_id: userId },
+    where: {
+      user_id: userId,
+      OR: [{ expires_at: null }, { expires_at: { gte: now } }],
+    },
   });
 
   for (const signal of signals) {
@@ -110,21 +124,35 @@ export async function buildUserProfile(userId: string): Promise<{
   }
 
   // Cap Safari history import signals per domain-topic pair
-  const safariDomainWeights = new Map<string, Map<string, number>>();
   for (const signal of signals) {
-    if (signal.signal_type !== "safari_history_import" || !signal.normalized_topic || !signal.raw_value) continue;
+    if (
+      signal.signal_type !== "safari_history_import" ||
+      !signal.normalized_topic ||
+      !signal.raw_value
+    ) {
+      continue;
+    }
+
     const domain = signal.raw_value;
     const topic = signal.normalized_topic;
-    const weight = signal.weight;
-    if (!safariDomainWeights.has(domain)) safariDomainWeights.set(domain, new Map());
-    const domainMap = safariDomainWeights.get(domain)!;
-    domainMap.set(topic, (domainMap.get(topic) ?? 0) + weight);
+    if (!safariTopicDomainRawWeights.has(topic)) {
+      safariTopicDomainRawWeights.set(topic, new Map());
+    }
+    const domainMap = safariTopicDomainRawWeights.get(topic)!;
+    domainMap.set(domain, (domainMap.get(domain) ?? 0) + signal.weight);
   }
-  for (const [, topicMap] of safariDomainWeights) {
-    for (const [topic, totalWeight] of topicMap) {
+
+  const safariTopicWeights = new Map<string, number>();
+  const safariTopicDomainWeights = new Map<string, Map<string, number>>();
+  for (const [topic, domainMap] of safariTopicDomainRawWeights) {
+    const cappedDomainWeights = new Map<string, number>();
+    for (const [domain, totalWeight] of domainMap) {
       const capped = Math.min(totalWeight, HISTORY_IMPORT_DOMAIN_WEIGHT_CAP);
+      cappedDomainWeights.set(domain, capped);
+      safariTopicWeights.set(topic, (safariTopicWeights.get(topic) ?? 0) + capped);
       topicWeights.set(topic, (topicWeights.get(topic) ?? 0) - totalWeight + capped);
     }
+    safariTopicDomainWeights.set(topic, cappedDomainWeights);
   }
 
   // --- Feedback events integration (7-day rolling window) ---
@@ -153,7 +181,14 @@ export async function buildUserProfile(userId: string): Promise<{
     topicWeights.set(topic, existing + weight);
   }
 
-  return { topicWeights, entityWeights };
+  return {
+    topicWeights,
+    entityWeights,
+    safariHistoryImport: {
+      topicWeights: safariTopicWeights,
+      topicDomainWeights: safariTopicDomainWeights,
+    },
+  };
 }
 
 /**
@@ -384,12 +419,16 @@ export async function filterBySourcePolicy(
     article_id: number;
     title: string;
     source_name: string;
+    canonical_url: string;
     published_at: Date | null;
     topics: string[];
     entities: string[];
     quality_score: number;
     dedupe_key: string;
     cluster_id: string | null;
+    provider: string;
+    license_class: string | null;
+    is_fixture: boolean;
   }>
 ): Promise<typeof candidates> {
   const sourcePolicyEnabled = await isFeatureEnabled("enable_source_policy");
@@ -435,14 +474,19 @@ export async function getCandidates(
     article_id: number;
     title: string;
     source_name: string;
+    canonical_url: string;
     published_at: Date | null;
     topics: string[];
     entities: string[];
     quality_score: number;
     dedupe_key: string;
     cluster_id: string | null;
+    provider: string;
+    license_class: string | null;
+    is_fixture: boolean;
   }>
 > {
+  const poolSize = Math.max(limit * 20, 200);
   const annotated = await db.article_annotations.findMany({
     where: {
       article: {
@@ -457,25 +501,43 @@ export async function getCandidates(
           id: true,
           title: true,
           source_name: true,
+          canonical_url: true,
           published_at: true,
           cluster_id: true,
+          provider: true,
+          license_class: true,
+          is_fixture: true,
         },
       },
     },
-    take: limit,
+    take: poolSize,
   });
 
-  return annotated.map((a) => ({
+  const candidates = annotated.map((a) => ({
     article_id: a.article.id,
-    title: a.article.title,
+    title: sanitizeFeedTitle(a.article.title) ?? (a.article.title.trim() || "Untitled"),
     source_name: a.article.source_name,
+    canonical_url: a.article.canonical_url,
     published_at: a.article.published_at,
     topics: a.topics_json ? JSON.parse(a.topics_json) : [],
     entities: a.entities_json ? JSON.parse(a.entities_json) : [],
     quality_score: a.quality_score ?? 3,
     dedupe_key: a.dedupe_key ?? "",
     cluster_id: a.article.cluster_id,
+    provider: a.article.provider,
+    license_class: a.article.license_class,
+    is_fixture: a.article.is_fixture,
   }));
+
+  return candidates
+    .filter((candidate) => !isFixtureArticle(candidate))
+    .sort((a, b) => {
+      const aTime = a.published_at?.getTime() ?? 0;
+      const bTime = b.published_at?.getTime() ?? 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return b.article_id - a.article_id;
+    })
+    .slice(0, limit);
 }
 
 /**
@@ -613,8 +675,14 @@ export async function generateDailyBriefForUser(
 
     // No annotated articles available — run a mini ingestion + annotation pipeline
     if (candidates.length === 0) {
-      await seedArticlesForNewUser();
+      await bootstrapLiveArticlesForNewUser();
       candidates = await getCandidates(since, 50);
+    }
+
+    if (candidates.length === 0) {
+      const error = new Error("No eligible live articles available for brief generation");
+      logError("brief-generation-empty-candidate-set", error, { userId });
+      throw error;
     }
 
     // Apply source quality floor filtering (gated by feature flag)
@@ -650,6 +718,7 @@ export async function generateDailyBriefForUser(
       score: number;
       summary: string;
       why_recommended: string;
+      provenance_json: string | null;
     }> = [];
 
     for (let i = 0; i < top5.length; i++) {
@@ -667,11 +736,17 @@ export async function generateDailyBriefForUser(
         const matchedEntities = candidate.entities.filter((e) =>
           profile.entityWeights.has(e)
         );
+        const provenance = buildBriefItemProvenance({
+          matchedTopics,
+          matchedEntities,
+          safariTopicWeights: profile.safariHistoryImport.topicWeights,
+          safariTopicDomainWeights: profile.safariHistoryImport.topicDomainWeights,
+        });
 
         const generated = await generateBriefItem({
           article_title: candidate.title,
           article_source: candidate.source_name,
-          article_snippet: article?.snippet ?? null,
+          article_snippet: sanitizeFeedSnippet(article?.snippet ?? null),
           matched_topics: matchedTopics,
           matched_entities: matchedEntities,
         });
@@ -682,19 +757,34 @@ export async function generateDailyBriefForUser(
           score: candidate.score,
           summary: generated.summary,
           why_recommended: generated.why_recommended,
+          provenance_json: JSON.stringify(provenance),
         });
       } catch (err) {
         // Fallback: use raw data without generated summary
-        console.error(
-          `Failed to generate summary for article ${candidate.article_id}:`,
-          err
+        logError("brief-item-generation", err, {
+          articleId: candidate.article_id,
+          title: candidate.title,
+          source: candidate.source_name,
+        });
+        const fallbackTopics = candidate.topics.filter((t) =>
+          profile.topicWeights.has(t)
         );
+        const fallbackEntities = candidate.entities.filter((e) =>
+          profile.entityWeights.has(e)
+        );
+        const provenance = buildBriefItemProvenance({
+          matchedTopics: fallbackTopics,
+          matchedEntities: fallbackEntities,
+          safariTopicWeights: profile.safariHistoryImport.topicWeights,
+          safariTopicDomainWeights: profile.safariHistoryImport.topicDomainWeights,
+        });
         briefItemsResult.push({
           article_id: candidate.article_id,
           rank: i + 1,
           score: candidate.score,
           summary: candidate.title,
           why_recommended: `Relevant to your interests`,
+          provenance_json: JSON.stringify(provenance),
         });
       }
     }
@@ -716,6 +806,7 @@ export async function generateDailyBriefForUser(
             score: item.score,
             summary: item.summary,
             why_recommended: item.why_recommended,
+            provenance_json: item.provenance_json,
           })),
         });
       }
@@ -754,7 +845,7 @@ export async function generateDailyBriefForUser(
         version_tag: "v0.1-error",
       },
     });
-    console.error(`Brief generation failed for brief ${brief.id}:`, err);
+    logError("brief-generation", err, { briefId: brief.id, userId });
 
     throw err;
   }
@@ -766,10 +857,14 @@ export async function generateDailyBriefForUser(
  * needed: 50 articles max from RSS feeds (skipping TheNewsAPI since it
  * requires a separate API key).
  */
-async function seedArticlesForNewUser(): Promise<number> {
+async function bootstrapLiveArticlesForNewUser(): Promise<number> {
   const rawArticles = await fetchAllRSSFeeds();
   if (rawArticles.length === 0) {
-    console.warn("seedArticles: no articles returned from RSS feeds");
+    logError(
+      "bootstrap-live-articles",
+      new Error("No articles returned from RSS feeds"),
+      { phase: "fetch" }
+    );
     return 0;
   }
 
@@ -788,15 +883,17 @@ async function seedArticlesForNewUser(): Promise<number> {
     try {
       const inserted = await db.articles.create({
         data: {
+          title: sanitizeFeedTitle(a.title) ?? (a.title.trim() || "Untitled"),
+          snippet: sanitizeFeedSnippet(a.snippet),
           canonical_url: a.canonical_url,
           source_name: a.source,
-          title: a.title,
-          snippet: a.snippet,
           published_at: a.published_at,
           language: a.language ?? "en",
           provider: a.provider,
-          license_class: a.license_class ?? "fair_use",
-          image_url: a.image_url,
+          is_fixture: false,
+          license_class: a.license_class ?? null,
+          image_url:
+            normalizePublicImageUrl(a.image_url ?? "", a.canonical_url) ?? null,
         },
       });
 
@@ -818,7 +915,10 @@ async function seedArticlesForNewUser(): Promise<number> {
           },
         });
       } catch {
-        console.warn(`Failed to classify article ${inserted.id}, using defaults`);
+        logError("bootstrap-live-article-classification", new Error("Failed to classify article, using defaults"), {
+          articleId: inserted.id,
+          source: inserted.source_name,
+        });
         // Default annotation so the article is still a candidate
         await db.article_annotations.create({
           data: {

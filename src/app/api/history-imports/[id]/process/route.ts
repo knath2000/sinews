@@ -4,6 +4,7 @@ import { isFeatureEnabled } from "@/server/feature-flags";
 import { db } from "@/server/db/client";
 import { deleteZip, streamDownload } from "@/server/history-import/storage";
 import { parseSafariHistoryZip } from "@/server/history-import/safari-parser";
+import { logError } from "@/server/error-logger";
 
 export async function POST(
   request: Request,
@@ -87,6 +88,8 @@ export async function POST(
     const message = err instanceof Error ? err.message : "Unknown error";
     const code = err instanceof Error ? err.message : "PARSE_ERROR";
 
+    logError("history-import-process", err, { importId: id, userId: dbUser.id, code });
+
     await db.history_imports.update({
       where: { id },
       data: { status: "failed", completed_at: new Date() },
@@ -109,8 +112,8 @@ export async function POST(
     if (!zipDeleted) {
       try {
         await deleteZip(dbUser.id, id);
-      } catch {
-        // Ignore cleanup errors
+      } catch (cleanupError) {
+        logError("history-import-delete-zip", cleanupError, { importId: id, userId: dbUser.id });
       }
     }
   }

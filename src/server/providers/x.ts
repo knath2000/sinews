@@ -1,6 +1,7 @@
 import { db } from "@/server/db/client";
 import { encrypt } from "@/server/crypto";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
+import { logError } from "@/server/error-logger";
 
 /**
  * X (Twitter) provider — token management, API fetches, and signal normalization.
@@ -241,7 +242,7 @@ async function refreshXToken(accountId: number): Promise<string> {
 
   if (!resp.ok) {
     const errText = await resp.text();
-    console.error("X token refresh failed:", errText);
+    logError("x-token-refresh", new Error(errText), { accountId });
     throw new Error(`X token refresh failed: ${resp.status} ${errText}`);
   }
 

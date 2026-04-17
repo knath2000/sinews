@@ -277,6 +277,7 @@ async function seedArticles(count: number) {
       published_at: generatePublishedAt(),
       language: "en",
       provider: "seed",
+      is_fixture: true,
       editorial_priority: Math.floor(Math.random() * 5) + 1,
     });
 

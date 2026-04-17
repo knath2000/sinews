@@ -3,6 +3,8 @@ import { db } from "@/server/db/client";
 import { encrypt } from "@/server/crypto";
 import { requireAuth } from "@/lib/auth-server";
 import { inngest } from "@/server/inngest/client";
+import { logError } from "@/server/error-logger";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 /**
  * GET /api/accounts/x/callback — completes the X OAuth 2.0 PKCE flow.
@@ -13,6 +15,7 @@ export async function GET(request: Request) {
   const auth = await requireAuth();
   if ("status" in auth) return auth;
   const { dbUser } = auth;
+  const appBaseUrl = getAppBaseUrl(request);
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -21,13 +24,13 @@ export async function GET(request: Request) {
 
   if (error) {
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=${error}`,
+      `${appBaseUrl}/settings?error=${error}`,
     );
   }
 
   if (!code || !state) {
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?error=missing_params`,
+      `${appBaseUrl}/settings?error=missing_params`,
     );
   }
 
@@ -59,8 +62,7 @@ export async function GET(request: Request) {
   // Exchange code for tokens
   const clientId = process.env.X_CLIENT_ID;
   const clientSecret = process.env.X_CLIENT_SECRET;
-  const redirectUri =
-    `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/api/accounts/x/callback`;
+  const redirectUri = `${appBaseUrl}/api/accounts/x/callback`;
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(
@@ -89,7 +91,7 @@ export async function GET(request: Request) {
 
     if (!tokenResponse.ok) {
       const errText = await tokenResponse.text();
-      console.error("X token exchange failed:", errText);
+      logError("x-token-exchange", new Error(errText), { userId: dbUser.id });
       return NextResponse.json(
         { error: "Failed to exchange code for tokens" },
         { status: 500 },
@@ -148,14 +150,14 @@ export async function GET(request: Request) {
       });
     } catch (err) {
       // Non-fatal: sync will also run on cron
-      console.warn("Failed to emit account.linked event:", err);
+      logError("x-account-linked-event", err, { userId: dbUser.id });
     }
 
     return NextResponse.redirect(
-      `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/settings?connected=x`,
+      `${appBaseUrl}/settings?connected=x`,
     );
   } catch (err) {
-    console.error("X OAuth callback error:", err);
+    logError("x-oauth-callback", err, { userId: dbUser.id });
     return NextResponse.json(
       { error: "OAuth callback failed" },
       { status: 500 },

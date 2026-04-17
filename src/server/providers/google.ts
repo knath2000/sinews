@@ -2,6 +2,7 @@ import { db } from "@/server/db/client";
 import { encrypt } from "@/server/crypto";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 import { extractTopics, recordSyncFailure, resetSyncFailure } from "./x";
+import { logError } from "@/server/error-logger";
 
 /**
  * Google provider — token management, People API profile fetch, signal normalization.
@@ -40,7 +41,7 @@ async function refreshGoogleToken(accountId: number): Promise<string> {
 
   if (!resp.ok) {
     const errText = await resp.text();
-    console.error("Google token refresh failed:", errText);
+    logError("google-token-refresh", new Error(errText), { accountId });
     throw new Error(
       `Google token refresh failed: ${resp.status} ${errText}`,
     );

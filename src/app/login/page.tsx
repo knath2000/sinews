@@ -82,14 +82,14 @@ function LoginContent() {
   };
 
   return (
-    <div className="flex min-h-screen flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-zinc-50 dark:bg-black">
-      <div className="w-full max-w-md space-y-8 bg-white dark:bg-zinc-900 p-8 rounded-2xl shadow-lg">
+    <div className="flex min-h-screen flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-zinc-50">
+      <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-lg">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
+          <h1 className="text-3xl font-semibold tracking-tight text-blacktext-zinc-50">
             {mode === "signin" ? "Sign in" : "Create an account"}
           </h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-sm text-zinc-600">
             {mode === "signin"
               ? "Enter your email and password"
               : "Enter your email and choose a password"}
@@ -101,8 +101,8 @@ function LoginContent() {
           {message && (
             <div className={`rounded-lg p-4 text-sm border ${
               emailConfirmationRequired
-                ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
-                : "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-green-50 text-green-700 border-green-200"
             }`}>
               {message}
               {emailConfirmationRequired && (
@@ -122,7 +122,7 @@ function LoginContent() {
           )}
 
           {error && (
-            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
+            <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700 border border-red-200">
               {error}
             </div>
           )}
@@ -132,7 +132,7 @@ function LoginContent() {
               <div>
                 <label
                   htmlFor="email"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  className="block text-sm font-medium text-zinc-700text-zinc-300"
                 >
                   Email address
                 </label>
@@ -144,7 +144,7 @@ function LoginContent() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="mt-2 block w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   placeholder="you@example.com"
                   disabled={isPending || !!message}
                 />
@@ -153,7 +153,7 @@ function LoginContent() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  className="block text-sm font-medium text-zinc-700text-zinc-300"
                 >
                   Password
                 </label>
@@ -165,7 +165,7 @@ function LoginContent() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-2 block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="mt-2 block w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   placeholder="At least 6 characters"
                   disabled={isPending || !!message}
                 />
@@ -188,12 +188,12 @@ function LoginContent() {
 
         {/* Toggle between sign-in and sign-up */}
         {!emailConfirmationRequired && (
-          <p className="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-500">
+          <p className="mt-4 text-center text-sm text-zinc-500">
             {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
               onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); setError(""); }}
-              className="text-blue-600 dark:text-blue-400 hover:underline"
+              className="text-blue-600text-blue-400 hover:underline"
             >
               {mode === "signin" ? "Sign up" : "Sign in"}
             </button>
@@ -201,13 +201,13 @@ function LoginContent() {
         )}
 
         {!emailConfirmationRequired && (
-          <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
+          <p className="mt-2 text-center text-xs text-zinc-400text-zinc-500">
             By creating an account, you agree to our{" "}
-            <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
+            <Link href="/privacy" className="text-blue-600text-blue-400 hover:underline">
               Privacy Policy
             </Link>{" "}
             and{" "}
-            <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
+            <Link href="/terms" className="text-blue-600text-blue-400 hover:underline">
               Terms of Service
             </Link>
             .
