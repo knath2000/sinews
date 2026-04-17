@@ -1,9 +1,5 @@
-"use client";
-
 import Link from "next/link";
-import { useSupabase } from "@/lib/supabase-provider";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 import {
   ArrowUpRight,
   ChevronRight,
@@ -12,6 +8,7 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
 
 const previewStories = [
   {
@@ -73,42 +70,24 @@ function PreviewThumb({
   );
 }
 
-function LandingPageContent() {
-  const router = useRouter();
-  const { session, loading } = useSupabase();
-
-  useEffect(() => {
-    if (session && !loading) {
-      router.push("/feed");
+export default async function LandingPage() {
+  // Server-side auth check: redirect logged-in users to feed
+  try {
+    const supabase = await createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      redirect("/feed");
     }
-  }, [session, loading, router]);
-
-  if (loading || session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="motion-fade-up w-full max-w-md rounded-[32px] border border-white/70 bg-white/80 p-8 text-center shadow-[0_24px_80px_-48px_rgba(15,23,42,0.42)] backdrop-blur-xl">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-100 to-amber-50">
-            <Sparkles className="h-8 w-8 text-sky-500" />
-          </div>
-          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-900">
-            Loading your briefing
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-600">
-            We are checking your session and preparing the brief.
-          </p>
-        </div>
-      </div>
-    );
+  } catch {
+    // Auth not configured — show landing page as-is
   }
 
   return (
     <div className="relative min-h-screen overflow-hidden">
+      {/* Static gradient background instead of heavy animated blurred blobs */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="motion-float-soft absolute left-[-7rem] top-[-5rem] h-80 w-80 rounded-full bg-orange-200/50 blur-3xlbg-sky-500/10" />
-        <div
-          className="motion-float-soft absolute right-[-7rem] top-24 h-96 w-96 rounded-full bg-sky-200/50 blur-3xlbg-fuchsia-500/10"
-          style={{ animationDelay: "1.4s" }}
-        />
+        <div className="absolute left-[-7rem] top-[-5rem] h-80 w-80 rounded-full bg-orange-200/50 blur-3xl" />
+        <div className="absolute right-[-7rem] top-24 h-96 w-96 rounded-full bg-sky-200/50 blur-3xl" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.74),_transparent_30%)] opacity-80" />
       </div>
 
@@ -149,7 +128,7 @@ function LandingPageContent() {
 
       <main className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
         <section className="grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
-          <div className="motion-fade-up max-w-2xl">
+          <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/75 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-zinc-500 shadow-sm backdrop-blur-xl">
               <Sparkles className="h-3.5 w-3.5 text-amber-500" />
               Personalized AI brief
@@ -217,7 +196,7 @@ function LandingPageContent() {
             </div>
           </div>
 
-          <div className="motion-fade-up lg:justify-self-end" style={{ animationDelay: "80ms" }}>
+          <div className="lg:justify-self-end">
             <div className="rounded-[36px] border border-white/75 bg-white/80 p-5 shadow-[0_32px_100px_-58px_rgba(15,23,42,0.42)] backdrop-blur-xl">
               <div className="rounded-[30px] bg-zinc-900 p-5 text-white shadow-[0_24px_60px_-36px_rgba(15,23,42,0.7)]">
                 <div className="flex items-center justify-between gap-3">
@@ -349,8 +328,4 @@ function LandingPageContent() {
       </footer>
     </div>
   );
-}
-
-export default function LandingPage() {
-  return <LandingPageContent />;
 }
