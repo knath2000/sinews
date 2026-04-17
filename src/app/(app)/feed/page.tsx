@@ -20,7 +20,9 @@ import {
 import { getCachedBrief, setCachedBrief } from "./feed-cache";
 import {
   normalizeFeedPayload,
+  parseReplacementArticle,
   type FeedArticleData,
+  type FeedReplacementArticle,
 } from "./feed-response";
 import { humanizeSafariTopic, joinHumanList } from "@/lib/safari-insights";
 import { useTheme } from "@/lib/theme-provider";
@@ -461,23 +463,37 @@ function ReadingHistory({
   );
 }
 
-function ArticleCard({ article, index }: { article: FeedArticleData; index: number }) {
+function ArticleCard({
+  article,
+  index,
+  onDownvote,
+}: {
+  article: FeedArticleData;
+  index: number;
+  onDownvote?: (article: FeedArticleData) => void;
+}) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
   const handleFeedback = useCallback(
     (type: "thumbs_up" | "thumbs_down") => {
       setFeedback(type === "thumbs_up" ? "up" : "down");
-      fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          briefItemId: article.brief_item_id,
-          eventType: type,
-          articleId: article.id,
-        }),
-      }).catch(() => {});
+      if (type === "thumbs_down") {
+        // Delegate to parent for possible card replacement
+        onDownvote?.(article);
+      } else {
+        // Thumbs-up is optimistic fire-and-forget
+        fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            briefItemId: article.brief_item_id,
+            eventType: type,
+            articleId: article.id,
+          }),
+        }).catch(() => {});
+      }
     },
-    [article.brief_item_id, article.id]
+    [article.brief_item_id, article.id, article, onDownvote]
   );
 
   const accent = fallbackGradients[index % fallbackGradients.length];
@@ -807,6 +823,52 @@ export default function FeedPage() {
 
   const hasArticles = Array.isArray(articles) && articles.length > 0;
 
+  // -- Downvote handler: POST /api/feedback and swap the card if replaced --
+
+  const handleDownvote = useCallback(
+    async (disliked: FeedArticleData) => {
+      try {
+        const res = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            briefItemId: disliked.brief_item_id,
+            eventType: "thumbs_down",
+            articleId: disliked.id,
+          }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          ok: boolean;
+          recorded: boolean;
+          replaced: boolean;
+          article?: Record<string, unknown> | null;
+        };
+        if (data.replaced && data.article) {
+          const replacement = parseReplacementArticle(data.article);
+          if (replacement && articles) {
+            setArticles((prev) => {
+              if (!prev) return prev;
+              return prev.map((a) =>
+                a.brief_item_id === disliked.brief_item_id ? replacement : a
+              );
+            });
+            // Update cache
+            setCachedBrief({
+              articles: articles.map((a) =>
+                a.brief_item_id === disliked.brief_item_id ? replacement : a
+              ),
+              generatedAt: generatedAt ?? new Date().toISOString(),
+            });
+          }
+        }
+      } catch {
+        // Silently fail — the feedback event was still recorded server-side
+      }
+    },
+    [articles, generatedAt]
+  );
+
   return (
     <PageShell
       shellClassName="lg:grid-cols-[270px_minmax(0,1fr)]"
@@ -905,7 +967,7 @@ export default function FeedPage() {
       ) : hasArticles ? (
         <div className="space-y-4">
           {articles.map((article, index) => (
-            <ArticleCard key={article.rank} article={article} index={index} />
+            <ArticleCard key={article.rank} article={article} index={index} onDownvote={handleDownvote} />
           ))}
           <ReadingHistory
             items={personalization.recentReading}

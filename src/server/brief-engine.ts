@@ -155,32 +155,6 @@ export async function buildUserProfile(userId: string): Promise<{
     safariTopicDomainWeights.set(topic, cappedDomainWeights);
   }
 
-  // --- Feedback events integration (7-day rolling window) ---
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  const feedbackRows = await db.$queryRaw<
-    Array<{ topic: string; event_type: string; count: bigint }>
-  >`
-    SELECT topic, event_type, count(*) 
-    FROM feedback_events 
-    WHERE user_id = ${userId}::uuid 
-      AND created_at > ${sevenDaysAgo} 
-      AND topic IS NOT NULL 
-    GROUP BY topic, event_type
-  `;
-
-  for (const row of feedbackRows) {
-    const count = Number(row.count);
-    const topic = row.topic;
-    const weight =
-      row.event_type === "thumbs_up"
-        ? count * SIGNAL_WEIGHTS.thumbs_up   // +0.8 per count
-        : count * SIGNAL_WEIGHTS.thumbs_down; // -1.0 per count
-    const existing = topicWeights.get(topic) ?? 0;
-    topicWeights.set(topic, existing + weight);
-  }
-
   return {
     topicWeights,
     entityWeights,

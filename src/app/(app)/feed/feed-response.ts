@@ -97,3 +97,72 @@ export function normalizeFeedPayload(value: unknown): FeedPayload | null {
     generatedAt: typeof payload.generatedAt === "string" ? payload.generatedAt : null,
   };
 }
+
+/** Parsed replacement article returned from POST /api/feedback for thumbs_down. */
+export interface FeedReplacementArticle {
+  id: number;
+  title: string;
+  source_name: string;
+  canonical_url: string;
+  image_url: string | null;
+  published_at: string | null;
+  summary: string | null;
+  why_recommended: string | null;
+  matched_signals: string[] | null;
+  provenance: SafariBriefProvenance | null;
+  rank: number;
+  score: number;
+  brief_item_id: number;
+}
+
+/** Response shape from POST /api/feedback. */
+export interface FeedbackResponse {
+  ok: boolean;
+  recorded: boolean;
+  replaced: boolean;
+  article?: FeedReplacementArticle | null;
+}
+
+/** Validate a replacement article from the feedback response. */
+export function parseReplacementArticle(value: unknown): FeedReplacementArticle | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const a = value as Record<string, unknown>;
+  if (
+    typeof a.id !== "number" ||
+    typeof a.title !== "string" ||
+    typeof a.source_name !== "string" ||
+    typeof a.canonical_url !== "string" ||
+    !(a.image_url === null || typeof a.image_url === "string") ||
+    !(a.published_at === null || typeof a.published_at === "string") ||
+    !(a.summary === null || typeof a.summary === "string") ||
+    typeof a.rank !== "number" ||
+    typeof a.score !== "number" ||
+    typeof a.brief_item_id !== "number"
+  ) return null;
+  const matched =
+    a.matched_signals === null ||
+    (Array.isArray(a.matched_signals) && a.matched_signals.every((s: unknown) => typeof s === "string"))
+      ? (a.matched_signals as string[] | null)
+      : null;
+  const provenance =
+    a.provenance === null || a.provenance === undefined
+      ? null
+      : isSafariBriefProvenance(a.provenance)
+        ? a.provenance
+        : null;
+  return {
+    id: a.id,
+    title: a.title,
+    source_name: a.source_name,
+    canonical_url: a.canonical_url,
+    image_url: a.image_url,
+    published_at: a.published_at,
+    summary: a.summary,
+    why_recommended: typeof a.why_recommended === "string" ? a.why_recommended : null,
+    matched_signals: matched,
+    provenance,
+    rank: a.rank,
+    score: a.score,
+    brief_item_id: a.brief_item_id,
+  };
+}
