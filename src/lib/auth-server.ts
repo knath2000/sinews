@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/auth";
+import { getSupabaseRuntimeConfig, SUPABASE_CONFIG_ERROR } from "@/lib/supabase/env";
 
 /**
  * Server-side auth helper for API routes.
@@ -15,6 +16,10 @@ import { ensureUser } from "@/lib/auth";
  *   const { supabase, dbUser, isAdmin } = auth;
  */
 export async function requireAuth() {
+  if (!getSupabaseRuntimeConfig()) {
+    return NextResponse.json({ error: SUPABASE_CONFIG_ERROR }, { status: 503 });
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, Suspense, useEffect } from "react";
+import { useState, useTransition, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSupabase } from "@/lib/supabase-provider";
@@ -10,21 +10,16 @@ type Mode = "signin" | "signup";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { session } = useSupabase();
+  const { session, configured } = useSupabase();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(
+    searchParams.get("mode") === "signup" ? "signup" : "signin"
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
-
-  // Read initial mode from URL
-  useEffect(() => {
-    if (searchParams.get("mode") === "signup") {
-      setMode("signup");
-    }
-  }, [searchParams]);
 
   // Redirect if already logged in
   if (session && !emailConfirmationRequired) {
@@ -86,7 +81,7 @@ function LoginContent() {
       <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-lg">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-blacktext-zinc-50">
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">
             {mode === "signin" ? "Sign in" : "Create an account"}
           </h1>
           <p className="mt-2 text-sm text-zinc-600">
@@ -98,6 +93,13 @@ function LoginContent() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+          {!configured && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Authentication is not configured for this deployment yet. Set the
+              Supabase production env vars in Vercel and redeploy.
+            </div>
+          )}
+
           {message && (
             <div className={`rounded-lg p-4 text-sm border ${
               emailConfirmationRequired
@@ -132,7 +134,7 @@ function LoginContent() {
               <div>
                 <label
                   htmlFor="email"
-                  className="block text-sm font-medium text-zinc-700text-zinc-300"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                 >
                   Email address
                 </label>
@@ -146,14 +148,14 @@ function LoginContent() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="mt-2 block w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   placeholder="you@example.com"
-                  disabled={isPending || !!message}
+                  disabled={isPending || !!message || !configured}
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-zinc-700text-zinc-300"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                 >
                   Password
                 </label>
@@ -167,18 +169,20 @@ function LoginContent() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="mt-2 block w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   placeholder="At least 6 characters"
-                  disabled={isPending || !!message}
+                  disabled={isPending || !!message || !configured}
                 />
               </div>
 
               <button
                 type="submit"
-                disabled={isPending || !!message}
+                disabled={isPending || !!message || !configured}
                 className="w-full flex justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPending
                   ? (mode === "signin" ? "Signing in..." : "Creating account...")
-                  : (message
+                  : !configured
+                    ? "Auth unavailable"
+                    : (message
                       ? (mode === "signin" ? "Signed in" : "Account created")
                       : (mode === "signin" ? "Sign in" : "Sign up"))}
               </button>
@@ -188,12 +192,12 @@ function LoginContent() {
 
         {/* Toggle between sign-in and sign-up */}
         {!emailConfirmationRequired && (
-          <p className="mt-4 text-center text-sm text-zinc-500">
+          <p className="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
             {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
               onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); setError(""); }}
-              className="text-blue-600text-blue-400 hover:underline"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               {mode === "signin" ? "Sign up" : "Sign in"}
             </button>
@@ -201,13 +205,13 @@ function LoginContent() {
         )}
 
         {!emailConfirmationRequired && (
-          <p className="mt-2 text-center text-xs text-zinc-400text-zinc-500">
+          <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
             By creating an account, you agree to our{" "}
-            <Link href="/privacy" className="text-blue-600text-blue-400 hover:underline">
+            <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
               Privacy Policy
             </Link>{" "}
             and{" "}
-            <Link href="/terms" className="text-blue-600text-blue-400 hover:underline">
+            <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
               Terms of Service
             </Link>
             .

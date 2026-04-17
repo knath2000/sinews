@@ -19,6 +19,7 @@ import {
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 import { TIMEZONES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
+import { hasSupabaseRuntimeConfig, SUPABASE_CONFIG_ERROR } from "@/lib/supabase/env";
 import { PageShell, ShellCard, ShellHero, ShellSoftCard } from "@/components/page-shell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { humanizeSafariTopic, type SafariImportSummary } from "@/lib/safari-insights";
@@ -29,6 +30,8 @@ const sidebarLinks = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
 ];
+
+const supabaseConfigured = hasSupabaseRuntimeConfig();
 
 interface LinkedAccountInfo {
   provider: string;
@@ -231,6 +234,10 @@ export default function SettingsPage({
   // --- Safari History Import handlers ---
   async function handleSafariUpload(file: File) {
     setSafariError(null);
+    if (!supabaseConfigured) {
+      setSafariError(SUPABASE_CONFIG_ERROR);
+      return;
+    }
     setSafariUploading(true);
     try {
       // Step 1: Create import record + get upload URL
@@ -343,6 +350,11 @@ export default function SettingsPage({
   ];
 
   async function handleSignOut() {
+    if (!supabaseConfigured) {
+      window.location.href = "/login";
+      return;
+    }
+
     try {
       const browserClient = createClient();
       await browserClient.auth.signOut();
@@ -422,6 +434,14 @@ export default function SettingsPage({
           ))}
         </div>
       </ShellSoftCard>
+
+      {!supabaseConfigured && (
+        <div className="rounded-[var(--radius-card)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          Authentication is not configured for this deployment yet. Set the
+          Supabase production env vars in Vercel and redeploy before using
+          profile sync, Safari import, or sign-out.
+        </div>
+      )}
 
       {connectedParam && (
         <div

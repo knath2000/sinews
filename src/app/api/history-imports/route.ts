@@ -9,6 +9,7 @@ import {
   buildSafariImportSummary,
   type SafariImportSummary,
 } from "@/lib/safari-insights";
+import { SUPABASE_CONFIG_ERROR } from "@/lib/supabase/env";
 
 // GET: Return latest import for user
 export async function GET() {
@@ -138,6 +139,12 @@ export async function POST() {
     });
   } catch (error) {
     logError("history-import-create", error, { userId: auth.dbUser.id });
+    if (
+      error instanceof Error &&
+      error.message.includes("Supabase admin client requires")
+    ) {
+      return NextResponse.json({ error: SUPABASE_CONFIG_ERROR }, { status: 503 });
+    }
     return NextResponse.json(
       { error: "Failed to create Safari import" },
       { status: 500 }

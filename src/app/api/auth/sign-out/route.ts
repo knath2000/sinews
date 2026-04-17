@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseRuntimeConfig, SUPABASE_CONFIG_ERROR } from "@/lib/supabase/env";
 
 /**
  * POST /api/auth/sign-out
@@ -7,6 +8,10 @@ import { createClient } from "@/lib/supabase/server";
  * properly invalidated on the server side in addition to client-side clearing.
  */
 export async function POST() {
+  if (!getSupabaseRuntimeConfig()) {
+    return NextResponse.json({ error: SUPABASE_CONFIG_ERROR }, { status: 503 });
+  }
+
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signOut();

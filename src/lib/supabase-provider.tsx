@@ -2,12 +2,14 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { hasSupabaseRuntimeConfig } from "@/lib/supabase/env";
 import type { Session } from "@supabase/supabase-js";
 
 type SupabaseContextValue = {
   session: Session | null;
   loading: boolean;
   refreshSession: () => Promise<void>;
+  configured: boolean;
 };
 
 const SupabaseContext = createContext<SupabaseContextValue | undefined>(undefined);
@@ -15,8 +17,15 @@ const SupabaseContext = createContext<SupabaseContextValue | undefined>(undefine
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const configured = hasSupabaseRuntimeConfig();
 
   const refreshSession = async () => {
+    if (!configured) {
+      setSession(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const client = createClient();
       const {
@@ -31,6 +40,12 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    if (!configured) {
+      setSession(null);
+      setLoading(false);
+      return;
+    }
+
     const client = createClient();
 
     // Get initial session
@@ -49,10 +64,10 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [configured]);
 
   return (
-    <SupabaseContext.Provider value={{ session, loading, refreshSession }}>
+    <SupabaseContext.Provider value={{ session, loading, refreshSession, configured }}>
       {children}
     </SupabaseContext.Provider>
   );

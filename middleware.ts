@@ -1,14 +1,33 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getSupabaseRuntimeConfig } from "@/lib/supabase/env";
 
 export async function middleware(request: NextRequest) {
   const supabaseResponse = NextResponse.next({
     request,
   });
 
+  const pathname = request.nextUrl.pathname;
+  const protectedPaths = ["/onboarding", "/dashboard", "/settings", "/feed"];
+  const isProtected = protectedPaths.some(
+    (p) => pathname === p || pathname.startsWith(p + "/")
+  );
+
+  const supabaseConfig = getSupabaseRuntimeConfig();
+  if (!supabaseConfig) {
+    if (isProtected) {
+      const redirectUrl = new URL("/login", request.url);
+      redirectUrl.searchParams.set("error", "auth-config-missing");
+      redirectUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseConfig.url,
+    supabaseConfig.anonKey,
     {
       cookies: {
         getAll() {
@@ -28,14 +47,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
-  const pathname = request.nextUrl.pathname;
-
-  // Protected routes: redirect to /login if no session
-  const protectedPaths = ["/onboarding", "/dashboard", "/settings", "/feed"];
-  const isProtected = protectedPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/")
-  );
 
   if (isProtected && !session) {
     const redirectUrl = new URL("/login", request.url);

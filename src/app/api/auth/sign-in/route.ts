@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/types/supabase";
 import { logError } from "@/server/error-logger";
+import { getSupabaseRuntimeConfig, SUPABASE_CONFIG_ERROR } from "@/lib/supabase/env";
 
 /**
  * POST /api/auth/sign-in
@@ -14,6 +15,11 @@ import { logError } from "@/server/error-logger";
  */
 export async function POST(request: Request) {
   try {
+    const config = getSupabaseRuntimeConfig();
+    if (!config) {
+      return NextResponse.json({ error: SUPABASE_CONFIG_ERROR }, { status: 503 });
+    }
+
     const { email, password } = await request.json();
 
     if (!email || typeof email !== "string") {
@@ -35,8 +41,8 @@ export async function POST(request: Request) {
     const req = request as NextRequest;
 
     const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      config.url,
+      config.anonKey,
       {
         cookies: {
           getAll() {

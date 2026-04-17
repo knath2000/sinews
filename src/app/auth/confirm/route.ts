@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getSupabaseRuntimeConfig } from "@/lib/supabase/env";
 
 /**
  * GET /auth/confirm
@@ -19,11 +20,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  const config = getSupabaseRuntimeConfig();
+  if (!config) {
+    const redirectUrl = new URL("/login", request.url);
+    redirectUrl.searchParams.set("error", "auth-config-missing");
+    return NextResponse.redirect(redirectUrl);
+  }
+
   const supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    config.url,
+    config.anonKey,
     {
       cookies: {
         getAll() {
