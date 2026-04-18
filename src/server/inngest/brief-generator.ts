@@ -19,11 +19,42 @@ export const batchAnnotateArticles = inngest.createFunction(
     ],
   },
   async ({ step }) => {
+    // 1. Diagnostics: Log raw counts to the Inngest Output tab
+    const stats = await step.run("check-database-stats", async () => {
+      const totalArticles = await db.articles.count();
+      const annotatedArticles = await db.article_annotations.count();
+
+      // Check for 'ghost' rows (annotations with no data)
+      const emptyAnnotations = await db.article_annotations.count({
+        where: { topics_json: null },
+      });
+
+      return {
+        db_total_articles: totalArticles,
+        db_annotated_count: annotatedArticles,
+        db_empty_ghost_annotations: emptyAnnotations,
+        calculated_missing: totalArticles - annotatedArticles,
+      };
+    });
+
+    // 2. Run the classification
     const count = await step.run("classify-batch", async () => {
       return await classifyUnannotatedArticles();
     });
 
-    return { status: "success", annotated_count: count };
+    // 3. Recursive trigger: if we processed a full batch, loop again
+    if (count >= 10) {
+      await step.sendEvent("loop-resync", {
+        name: "admin.resync.annotations",
+        data: {},
+      });
+    }
+
+    return {
+      status: "success",
+      processed_in_this_run: count,
+      stats,
+    };
   }
 );
 

@@ -151,8 +151,13 @@ export async function classifyUnannotatedArticles(): Promise<number> {
 
   const articlesWithoutAnnotations = await db.articles.findMany({
     where: {
-      article_annotations: null,
-      blocked_reason: null,
+      article_annotations: {
+        is: null,
+      },
+      OR: [
+        { blocked_reason: null },
+        { blocked_reason: "" },
+      ],
     },
     select: {
       id: true,
@@ -160,11 +165,21 @@ export async function classifyUnannotatedArticles(): Promise<number> {
       source_name: true,
       snippet: true,
     },
-    take: 100,
+    take: 10,
   });
 
+  console.log(`[BATCH] Query returned ${articlesWithoutAnnotations.length} articles.`);
+
   if (articlesWithoutAnnotations.length === 0) {
-    console.log("[BATCH] Zero unannotated articles found.");
+    // If we still get 0, log a sample article to see why it fails the filter
+    const sample = await db.articles.findFirst({
+      include: { article_annotations: true },
+    });
+    console.log("[BATCH] Filter Debug - Sample Article:", JSON.stringify({
+      id: sample?.id,
+      has_annotation_record: !!sample?.article_annotations,
+      blocked_reason: sample?.blocked_reason,
+    }));
     return 0;
   }
 
