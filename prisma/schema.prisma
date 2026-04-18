@@ -108,6 +108,7 @@ model articles {
   cluster_id         String?   @db.Text
   editorial_priority Int       @default(3)
   blocked_reason     String?   @db.Text
+  created_at         DateTime  @default(now()) @db.Timestamptz
 
   article_annotations article_annotations?
   daily_brief_items   daily_brief_items[]

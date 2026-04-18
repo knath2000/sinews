@@ -169,6 +169,13 @@ export function ArticlesTable() {
                 Published <SortArrow col="published_at" />
               </th>
               <th
+                className="cursor-pointer px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--ds-text-dim)" }}
+                onClick={() => handleSort("created_at")}
+              >
+                Ingested <SortArrow col="created_at" />
+              </th>
+              <th
                 className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest"
                 style={{ color: "var(--ds-text-dim)" }}
               >
@@ -217,6 +224,9 @@ export function ArticlesTable() {
                     {article.published_at
                       ? new Date(article.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
                       : "—"}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs" style={{ color: "var(--ds-text-dim)" }}>
+                    {new Date(article.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   </td>
                   <td className="px-4 py-3">
                     <button

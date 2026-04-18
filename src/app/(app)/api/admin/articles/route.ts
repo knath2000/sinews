@@ -20,10 +20,11 @@ export async function GET(request: NextRequest) {
         source_name: true,
         provider: true,
         published_at: true,
+        created_at: true,
         canonical_url: true,
         language: true,
       },
-      orderBy: { published_at: "desc" },
+      orderBy: { created_at: "desc" },
       take: limit,
     });
 
