@@ -210,18 +210,18 @@ export default function AdminPage() {
   );
   const flagsUpdating = useRef(new Set<string>());
 
-  // Poll ref for cleanup
-  const pollRef = useRef<number | null>(null);
+  // Poll ref for recursive setTimeout cleanup
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMetrics = useCallback(async () => {
     try {
-      setError(null);
       const data = await fetchJson<MetricsData>("/api/admin/metrics");
       setMetrics(data);
-      setLoading(false);
+      setError(null);
     } catch (e) {
       console.error("[AI-NEWS ERROR] admin-metrics-load:", e);
       setError(e instanceof Error ? e.message : "Failed to load metrics");
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -247,11 +247,21 @@ export default function AdminPage() {
   }, [flags]);
 
   useEffect(() => {
-    loadMetrics();
-    loadFlags();
-    pollRef.current = window.setInterval(loadMetrics, 30_000);
+    let isMounted = true;
+
+    const fetchMetrics = async () => {
+      await loadMetrics();
+      await loadFlags();
+      if (isMounted) {
+        pollRef.current = setTimeout(fetchMetrics, 10_000);
+      }
+    };
+
+    void fetchMetrics();
+
     return () => {
-      if (pollRef.current !== null) clearInterval(pollRef.current);
+      isMounted = false;
+      if (pollRef.current !== null) clearTimeout(pollRef.current);
     };
   }, [loadMetrics, loadFlags]);
 
