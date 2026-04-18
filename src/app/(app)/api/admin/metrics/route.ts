@@ -23,6 +23,7 @@ export async function GET() {
 
   const [
     articlesBySource,
+    articlesBySourceToday,
     briefsOverview,
     connectorFailures,
     topTopics,
@@ -33,6 +34,15 @@ export async function GET() {
       by: ["source_name", "provider"],
       where: {
         published_at: { gte: sevenDaysAgo },
+      },
+      _count: true,
+    }),
+
+    // Ingestion stats: articles by source today
+    db.articles.groupBy({
+      by: ["source_name", "provider"],
+      where: {
+        published_at: { gte: startOfDay },
       },
       _count: true,
     }),
@@ -100,6 +110,11 @@ export async function GET() {
 
   return NextResponse.json({
     ingestionStats: articlesBySource.map((row) => ({
+      source: row.source_name,
+      provider: row.provider,
+      count: row._count,
+    })),
+    ingestionStatsToday: articlesBySourceToday.map((row) => ({
       source: row.source_name,
       provider: row.provider,
       count: row._count,

@@ -33,6 +33,7 @@ interface BlockedSource {
 }
 interface MetricsData {
   ingestionStats: IngestionStat[];
+  ingestionStatsToday: IngestionStat[];
   briefStats: BriefStats;
   connectorFailures: ConnectorFailure[];
   topTopics: TopicStat[];
@@ -69,6 +70,116 @@ function StatusDot({ status }: { status: string }) {
       <span className={`w-2 h-2 rounded-full ${color}`} />
       {status}
     </span>
+  );
+}
+
+function IngestionTable({
+  ingestionStats7d,
+  ingestionStatsToday,
+}: {
+  ingestionStats7d: IngestionStat[];
+  ingestionStatsToday: IngestionStat[];
+}) {
+  const [view, setView] = useState<"7d" | "today">("7d");
+  const stats = view === "7d" ? ingestionStats7d : ingestionStatsToday;
+  const totalCount = stats.reduce((s, r) => s + r.count, 0);
+
+  return (
+    <div>
+      <div className="flex flex-col gap-3 border-b border-white/50 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+            Ingestion
+          </p>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900">
+            {view === "7d" ? "Ingestion (last 7 days)" : "Ingested today"}
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="rounded-full border px-3 py-1 text-xs font-medium"
+            style={{
+              background: "rgba(255,255,255,0.50)",
+              color: "rgba(59,130,246,0.75)",
+              borderColor: "rgba(56,189,248,0.12)",
+            }}
+          >
+            {totalCount} articles
+          </div>
+          <div className="flex gap-0.5 rounded-full border border-white/40 bg-white/40 p-0.5">
+            <button
+              onClick={() => setView("7d")}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                view === "7d"
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-500 hover:text-zinc-900"
+              }`}
+            >
+              7 Days
+            </button>
+            <button
+              onClick={() => setView("today")}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                view === "today"
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-500 hover:text-zinc-900"
+              }`}
+            >
+              Today
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/40">
+              <th className="px-3 py-2 text-left font-medium text-zinc-500">
+                Source
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-zinc-500">
+                Provider
+              </th>
+              <th className="px-3 py-2 text-right font-medium text-zinc-500">
+                Articles
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={3}
+                  className="px-3 py-8 text-center text-zinc-400"
+                >
+                  No articles{" "}
+                  {view === "7d"
+                    ? "in the last 7 days"
+                    : "published today"}.
+                </td>
+              </tr>
+            ) : (
+              stats.map((row, i) => (
+                <tr
+                  key={`${row.source}-${row.provider}-${i}`}
+                  className="border-b border-white/30 last:border-b-0"
+                >
+                  <td className="px-3 py-3 font-medium text-zinc-900">
+                    {row.source}
+                  </td>
+                  <td className="px-3 py-3 text-zinc-500">
+                    {row.provider}
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono text-zinc-700">
+                    {row.count}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -495,72 +606,10 @@ export default function AdminPage() {
               id="ingestion"
               className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] p-6 shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-panel-blur)]"
             >
-              <div className="flex flex-col gap-3 border-b border-white/50 pb-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                    Ingestion
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900">
-                    Ingestion (last 7 days)
-                  </h2>
-                </div>
-                <div
-                  className="rounded-full px-3 py-1 text-xs font-medium"
-                  style={{
-                    background: "rgba(255,255,255,0.50)",
-                    color: "rgba(59,130,246,0.75)",
-                    border: "1px solid rgba(56,189,248,0.12)",
-                  }}
-                >
-                  {metrics.ingestionStats.length} source rows
-                </div>
-              </div>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-white/40">
-                      <th className="px-3 py-2 text-left font-medium text-zinc-500">
-                        Source
-                      </th>
-                      <th className="px-3 py-2 text-left font-medium text-zinc-500">
-                        Provider
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium text-zinc-500">
-                        Articles
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {metrics.ingestionStats.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="px-3 py-8 text-center text-zinc-400"
-                        >
-                          No articles in the last 7 days.
-                        </td>
-                      </tr>
-                    ) : (
-                      metrics.ingestionStats.map((row, i) => (
-                        <tr
-                          key={`${row.source}-${row.provider}-${i}`}
-                          className="border-b border-white/30 last:border-b-0"
-                        >
-                          <td className="px-3 py-3 font-medium text-zinc-900">
-                            {row.source}
-                          </td>
-                          <td className="px-3 py-3 text-zinc-500">
-                            {row.provider}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-zinc-700">
-                            {row.count}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <IngestionTable
+                ingestionStats7d={metrics.ingestionStats}
+                ingestionStatsToday={metrics.ingestionStatsToday}
+              />
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
