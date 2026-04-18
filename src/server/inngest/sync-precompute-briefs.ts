@@ -21,7 +21,7 @@ export const syncPrecomputeBriefs = inngest.createFunction(
     name: "Precompute Daily Briefs",
     retries: 0,
     concurrency: {
-      limit: 10,
+      limit: 5,
     },
     triggers: [
       { cron: "0 * * * *" }, // Every hour
