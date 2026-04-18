@@ -359,8 +359,31 @@ function BriefProgressCard({
   onRefresh: () => void;
 }) {
   const isFailed = progress.phase === "failed";
-  const isWritingSummaries = progress.phase === "writing_summaries";
-  const currentOrder = PHASE_ORDER[progress.phase] ?? 0;
+  const targetOrder = isFailed ? 6 : (PHASE_ORDER[progress.phase] ?? 0);
+
+  // Local state to simulate smooth visual progression
+  const [currentOrder, setCurrentOrder] = useState(0);
+
+  useEffect(() => {
+    if (isFailed) {
+      setCurrentOrder(6);
+      return;
+    }
+    if (currentOrder < targetOrder) {
+      const timer = setTimeout(() => {
+        setCurrentOrder((prev) => prev + 1);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [currentOrder, targetOrder, isFailed]);
+
+  // Derive UI phase from the simulated currentOrder
+  const phaseKeys = Object.keys(PHASE_ORDER);
+  const displayPhase =
+    phaseKeys.find((k) => PHASE_ORDER[k as keyof typeof PHASE_ORDER] === currentOrder) ?? "starting";
+  const displayMessage =
+    currentOrder === targetOrder ? progress.message : PHASE_MESSAGES[displayPhase];
+  const isWritingSummaries = displayPhase === "writing_summaries";
 
   if (isFailed) {
     return (
@@ -403,12 +426,12 @@ function BriefProgressCard({
           </svg>
         </div>
         <h2 className="mt-4 text-xl font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
-          {progress.message}
+          {displayMessage}
         </h2>
 
         {progress.totalSteps > 0 && (
           <p className="mt-2 text-sm" style={{ color: "var(--ds-text-muted)" }}>
-            Step {progress.step} of {progress.totalSteps}
+            Step {Math.min(currentOrder + 1, progress.totalSteps)} of {progress.totalSteps}
           </p>
         )}
 
@@ -429,7 +452,7 @@ function BriefProgressCard({
           return (
             <div
               key={phase}
-              className="flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm"
+              className="flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-colors"
               style={{
                 color: isCurrent
                   ? "var(--ds-accent)"

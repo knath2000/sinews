@@ -7,7 +7,6 @@ import { PHASE_MESSAGES, type BriefProgress } from "@/lib/brief-progress";
 export const dynamic = "force-dynamic";
 import { logError } from "@/server/error-logger";
 import { inngest } from "@/server/inngest/client";
-import { getUserBriefDateRangeFromTz } from "@/lib/brief-date";
 
 /**
  * GET /api/feed — returns today's 5-article brief.
@@ -32,13 +31,16 @@ export async function GET(request: NextRequest) {
     }
 
     // No completed brief — check for in-progress / failed brief
-    const dateRange = getUserBriefDateRangeFromTz(dbUser.timezone);
     const { db } = await import("@/server/db/client");
+
+    // Use exact date string matching aligned with brief-engine.ts
+    const localDateStr = new Date().toLocaleDateString("en-CA", { timeZone: dbUser.timezone || "America/Los_Angeles" });
+    const briefDate = new Date(localDateStr);
 
     const inProgressBrief = await db.daily_briefs.findFirst({
       where: {
         user_id: dbUser.id,
-        brief_date: dateRange,
+        brief_date: briefDate,
         status: { in: ["pending", "generating", "failed"] },
       },
       select: { id: true, status: true, progress_json: true },
@@ -118,12 +120,12 @@ export async function GET(request: NextRequest) {
         where: {
           user_id_brief_date: {
             user_id: dbUser.id,
-            brief_date: getUserBriefDateRangeFromTz(dbUser.timezone).gte,
+            brief_date: briefDate,
           },
         },
         create: {
           user_id: dbUser.id,
-          brief_date: getUserBriefDateRangeFromTz(dbUser.timezone).gte,
+          brief_date: briefDate,
           status: "pending",
           progress_json: JSON.stringify({
             phase: "starting",
