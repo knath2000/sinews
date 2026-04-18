@@ -209,107 +209,18 @@ export async function loadUserTopics(userId: string) {
 
 // -- Brief progress tracking -----------------------------------------------
 
-export interface BriefProgress {
-  phase: string;
-  message: string;
-  step: number;
-  totalSteps: number;
-  itemsCompleted: number;
-  itemsTotal: number;
-  updatedAt: string;
-}
+export {
+  BRIEF_PHASES,
+  PHASE_MESSAGES,
+  PHASE_ORDER,
+  type BriefProgress,
+} from "@/lib/brief-progress";
 
-export const BRIEF_PHASES = [
-  "starting",
-  "building_profile",
-  "loading_candidates",
-  "ranking_candidates",
-  "writing_summaries",
-  "finalizing",
-] as const;
-
-export const PHASE_ORDER: Record<string, number> = {
-  starting: 0,
-  building_profile: 1,
-  loading_candidates: 2,
-  ranking_candidates: 3,
-  writing_summaries: 4,
-  finalizing: 5,
-  failed: 6,
-};
-
-export const PHASE_MESSAGES: Record<string, string> = {
-  starting: "Starting your brief",
-  building_profile: "Analyzing your interests",
-  loading_candidates: "Loading fresh stories",
-  ranking_candidates: "Ranking the best matches",
-  writing_summaries: "Writing summaries and recommendations",
-  finalizing: "Finishing your brief",
-  failed: "Brief generation failed. Try again.",
-};
-
-/**
- * Update progress_json on the brief identified by userId + briefDate.
- */
-export async function updateBriefProgress(
-  userId: string,
-  briefDate: Date,
-  progress: BriefProgress,
-): Promise<void> {
-  await db.daily_briefs.updateMany({
-    where: {
-      user_id: userId,
-      brief_date: briefDate,
-    },
-    data: { progress_json: JSON.stringify(progress) },
-  });
-}
-
-/**
- * Load progress for a user's brief today.
- * Returns null if no in-progress brief or no progress_json.
- */
-export async function loadBriefProgress(
-  userId: string,
-): Promise<{ progress: BriefProgress; status: string } | null> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const brief = await db.daily_briefs.findFirst({
-    where: {
-      user_id: userId,
-      brief_date: { gte: today },
-      status: { in: ["pending", "generating", "failed"] },
-    },
-    select: { progress_json: true, status: true },
-  });
-
-  if (!brief?.progress_json) return null;
-
-  try {
-    const progress = JSON.parse(brief.progress_json) as BriefProgress;
-    return { progress, status: brief.status };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Clear progress_json on a brief (called when complete or on failure).
- */
-export async function clearBriefProgress(
-  userId: string,
-  briefDate: Date,
-): Promise<void> {
-  await db.daily_briefs.updateMany({
-    where: {
-      user_id: userId,
-      brief_date: briefDate,
-    },
-    data: { progress_json: null },
-  });
-}
-
+export {
+  updateBriefProgress,
+  loadBriefProgress,
+  clearBriefProgress,
+} from "@/lib/brief-progress-db";
 // -- Feedback + interest_signals -------------------------------------------
 
 /**

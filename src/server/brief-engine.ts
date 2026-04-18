@@ -11,7 +11,11 @@ import { normalizePublicImageUrl } from "./url-utils";
 import { classifyArticle } from "./article-classifier";
 import { sanitizeFeedSnippet, sanitizeFeedTitle } from "./text-utils";
 import { buildBriefItemProvenance } from "@/lib/safari-insights";
-import { updateBriefProgress, PHASE_MESSAGES } from "@/server/feed-loader";
+import { updateBriefProgress as updateBriefProgressDb } from "@/lib/brief-progress-db";
+import { PHASE_MESSAGES } from "@/lib/brief-progress";
+
+// Re-export for backwards compat through feed-loader re-exports.
+const updateBriefProgress = updateBriefProgressDb;
 
 
 const SUMMARY_MODEL =

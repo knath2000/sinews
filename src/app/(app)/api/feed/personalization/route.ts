@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
+import { logError } from "@/server/error-logger";
 
 /**
  * GET /api/feed/personalization — returns personalization metrics for the sidebar.
  * Includes topic coverage, active signals, articles read today, and recent reading history.
  */
 export async function GET() {
-  const auth = await requireAuth();
-  if ("status" in auth) return auth;
-  const { dbUser } = auth;
+  try {
+    const auth = await requireAuth();
+    if ("status" in auth) return auth;
+    const { dbUser } = auth;
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -117,4 +119,8 @@ export async function GET() {
       recentReading: recentReadingParsed,
     },
   });
+  } catch (err) {
+    logError("api-feed-personalization", err);
+    return NextResponse.json({ error: "Personalization data unavailable" }, { status: 500 });
+  }
 }

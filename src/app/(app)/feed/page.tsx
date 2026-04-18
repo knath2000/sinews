@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -28,7 +28,7 @@ import { useTheme } from "@/lib/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PageShell } from "@/components/page-shell";
 import { isProbablyArticleImageUrl } from "@/lib/image-suitability";
-import { BRIEF_PHASES, PHASE_MESSAGES, PHASE_ORDER } from "@/server/feed-loader";
+import { BRIEF_PHASES, PHASE_MESSAGES, PHASE_ORDER } from "@/lib/brief-progress";
 
 interface BriefProgressState {
   generating: boolean;
@@ -452,6 +452,32 @@ function BriefProgressCard({
   );
 }
 
+function FeedErrorCard({ onRetry }: { onRetry: () => void }) {
+  return (
+    <section className="rounded-[var(--radius-card)] border border-rose-200 bg-rose-50 p-8 text-center shadow-[var(--shadow-soft)] dark:border-rose-900/40 dark:bg-rose-950/20">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400">
+        <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <h2 className="text-strong mt-4 text-2xl font-semibold tracking-tight">
+        We couldn&apos;t load your briefing
+      </h2>
+      <p className="text-muted mx-auto mt-3 max-w-xl text-sm leading-relaxed">
+        The feed is temporarily unavailable. We&apos;ll keep trying in the background.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-6 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+      >
+        Try again
+        <ArrowUpRight className="h-4 w-4" />
+      </button>
+    </section>
+  );
+}
+
 function ConsentPrompt({
   acceptingConsent,
   onAccept,
@@ -781,6 +807,7 @@ export default function FeedPage() {
   const [articles, setArticles] = useState<FeedArticleData[] | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [progressState, setProgressState] = useState<BriefProgressState | null>(null);
+  const [feedError, setFeedError] = useState(false);
   const [consentNeeded, setConsentNeeded] = useState(false);
   const [acceptingConsent, setAcceptingConsent] = useState(false);
   const [displayName, setDisplayName] = useState<string>("");
@@ -794,6 +821,12 @@ export default function FeedPage() {
     recentReading: [],
   });
   const { isDark, toggleDark, loading: themeLoading } = useTheme();
+  // Hydration guard — prevents React #418 mismatch from time-dependent SSR text.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   // Check consent first, then start continuous polling
   useEffect(() => {
@@ -812,6 +845,7 @@ export default function FeedPage() {
             setGeneratedAt(normalized.generatedAt);
             setCachedBrief(normalized);
             setProgressState(null);
+            setFeedError(false);
             setLoading(false);
           }
           return { ok: !!normalized };
@@ -821,6 +855,7 @@ export default function FeedPage() {
           const data = await res.json() as BriefProgressState;
           if (mounted) {
             setProgressState(data);
+            setFeedError(false);
             // Keep any existing cached articles on screen during regeneration.
           }
           return { ok: false };
@@ -830,13 +865,26 @@ export default function FeedPage() {
           const data = await res.json() as BriefProgressState;
           if (mounted) {
             setProgressState(data);
+            setFeedError(false);
             failed = true;
           }
           return { ok: false };
         }
 
+        // 5xx or other unexpected response — explicit error state
+        if (res.status >= 500 && mounted) {
+          setFeedError(true);
+          setProgressState(null);
+            setLoading(false);
+        }
+
         return { ok: false };
       } catch {
+        if (mounted) {
+          setFeedError(true);
+          setProgressState(null);
+            setLoading(false);
+        }
         return { ok: false };
       }
     }
@@ -882,7 +930,7 @@ export default function FeedPage() {
       // Step 3: Fetch (and keep polling if not ready)
       const { ok } = await fetchBrief();
       if (!ok && mounted) {
-        if (!cached) setLoading(false); // already cleared if cached existed
+        setLoading(false);
         const delayMs = (Date.now() - pollStart) >= 60_000 ? 8000 : 3000;
         schedulePoll(delayMs, pollStart);
       }
@@ -899,6 +947,7 @@ export default function FeedPage() {
   // Refresh trigger — re-fetches /api/feed and updates progress + articles.
   const handleRefresh = useCallback(() => {
     setProgressState(null);
+    setFeedError(false);
     fetch("/api/feed")
       .then((res) => {
         if (res.ok) return res.json().then((data) => {
@@ -908,14 +957,23 @@ export default function FeedPage() {
             setGeneratedAt(normalized.generatedAt);
             setCachedBrief(normalized);
             setProgressState(null);
+            setFeedError(false);
             setLoading(false);
           }
         });
         if (res.status === 202) return res.json().then((data: BriefProgressState) => {
           setProgressState(data);
+          setFeedError(false);
         });
+        if (res.status >= 500) {
+          setFeedError(true);
+          setProgressState(null);
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        setFeedError(true);
+        setProgressState(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -1074,14 +1132,18 @@ export default function FeedPage() {
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-muted text-sm">
-              {getGreeting()}, {displayName || "there"}
+              {mounted ? getGreeting() : "Welcome back"}, {displayName || "there"}
             </p>
             <h1 className="text-strong mt-1 text-[clamp(1.8rem,3vw,2.35rem)] font-semibold tracking-tight">
               Your daily curated briefing
             </h1>
             <p className="text-muted mt-2 inline-flex items-center gap-1.5 text-sm">
               <Clock className="h-4 w-4" />
-              {generatedAt ? `Updated ${formatTime(generatedAt)} · ${formatDateLabel(generatedAt)}` : "Preparing today’s brief"}
+              {mounted && generatedAt
+                ? `Updated ${formatTime(generatedAt)} · ${formatDateLabel(generatedAt)}`
+                : generatedAt
+                  ? "Preparing today's brief"
+                  : "Pending"}
             </p>
           </div>
 
@@ -1116,6 +1178,8 @@ export default function FeedPage() {
 
       {consentNeeded ? (
         <ConsentPrompt acceptingConsent={acceptingConsent} onAccept={handleAcceptConsent} />
+      ) : feedError ? (
+        <FeedErrorCard onRetry={handleRefresh} />
       ) : loading && !hasArticles ? (
         <div className="space-y-4">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -1137,7 +1201,7 @@ export default function FeedPage() {
               totalSteps: 6,
               itemsCompleted: 0,
               itemsTotal: 0,
-              updatedAt: new Date().toISOString(),
+              updatedAt: "1970-01-01T00:00:00.000Z",
             }}
             onRefresh={handleRefresh}
           />
@@ -1147,10 +1211,12 @@ export default function FeedPage() {
           {articles.map((article, index) => (
             <ArticleCard key={`${article.brief_item_id}-${article.id}`} article={article} index={index} onDownvote={handleDownvote} />
           ))}
-          <ReadingHistory
-            items={personalization.recentReading}
-            readToday={personalization.articlesReadToday}
-          />
+          {mounted ? (
+            <ReadingHistory
+              items={personalization.recentReading}
+              readToday={personalization.articlesReadToday}
+            />
+          ) : null}
         </div>
       ) : (
         <BriefProgressCard
@@ -1161,7 +1227,7 @@ export default function FeedPage() {
             totalSteps: 6,
             itemsCompleted: 0,
             itemsTotal: 0,
-            updatedAt: new Date().toISOString(),
+            updatedAt: "1970-01-01T00:00:00.000Z",
           }}
           onRefresh={handleRefresh}
         />
