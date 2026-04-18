@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { FLAG_KEYS, type FlagKey } from "@/lib/flags";
 import { PageShell } from "@/components/page-shell";
+import { ArticlesTable } from "@/components/admin/articles-table";
 
 // -- Types -------------------------------------------------------------------
 
@@ -379,6 +380,7 @@ export default function AdminPage() {
     { href: "#connectors", label: "Connectors" },
     { href: "#topics", label: "Top topics" },
     { href: "#blocked-sources", label: "Blocked sources" },
+    { href: "#all-articles", label: "All articles" },
     { href: "#actions", label: "Actions" },
     { href: "#flags", label: "Flags" },
   ];
@@ -756,6 +758,9 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+
+            {/* All articles — sortable, deletable table */}
+            <ArticlesTable />
 
             {/* Actions — manual triggers */}
             <div id="actions" className="grid gap-6 xl:grid-cols-2">
