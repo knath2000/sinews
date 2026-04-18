@@ -39,7 +39,7 @@ export interface AnnotationWithArticleId extends ArticleAnnotation {
 }
 
 /**
- * Classifies an article using OpenAI.
+ * Classifies an article using OpenAI/OpenRouter.
  * Input: title, source, snippet
  * Output: topics (up to 3 from taxonomy), entities (up to 8), quality_score (1-5), dedupe_key
  */
@@ -80,20 +80,44 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
 }`;
 
   const oc = getClient();
-  const response = await oc.chat.completions.create({
-    model: CLASSIFIER_MODEL,
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.1,
-    max_tokens: 300,
-    response_format: { type: "json_object" },
-  });
+  const shortTitle = input.title.substring(0, 40);
+  console.log(`[LLM-GATEWAY] Sending "${shortTitle}..." to OpenRouter (${CLASSIFIER_MODEL})`);
+  const startTime = Date.now();
 
-  const content = response.choices[0]?.message.content;
-  if (!content) {
-    throw new Error("OpenAI classifier returned empty response");
+  let response;
+  try {
+    response = await oc.chat.completions.create({
+      model: CLASSIFIER_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 300,
+      response_format: { type: "json_object" },
+    });
+  } catch (networkError) {
+    console.error(`[LLM-NETWORK] OpenRouter rejected request for "${shortTitle}":`, networkError);
+    throw networkError;
   }
 
-  const parsed = JSON.parse(content) as Partial<ArticleAnnotation>;
+  let raw = response.choices[0]?.message.content;
+  if (!raw) {
+    console.error(`[LLM-EMPTY] Returned empty response for "${shortTitle}"`);
+    throw new Error("Classifier returned empty response");
+  }
+
+  const elapsed = Date.now() - startTime;
+  console.log(`[LLM-SUCCESS] Response in ${elapsed}ms for "${shortTitle}"`);
+
+  // Strip markdown fences from open-source models
+  raw = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+  let parsed: Partial<ArticleAnnotation>;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseError) {
+    console.error(`[LLM-PARSE] Failed to parse JSON for "${shortTitle}"`);
+    console.error(`[LLM-RAW-OUTPUT]:\n${raw}`);
+    throw new Error("Invalid JSON from classifier");
+  }
 
   // Validate and sanitize
   const topics = (parsed.topics ?? []).filter((t): t is TopicTaxonomy =>
@@ -116,18 +140,15 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
     .slice(0, 64)
     .replace(/^-|-$/g, "");
 
-  return {
-    topics,
-    entities,
-    quality_score,
-    dedupe_key,
-  };
+  return { topics, entities, quality_score, dedupe_key };
 }
 
 /**
  * Batch classify articles that don't have annotations yet.
  */
 export async function classifyUnannotatedArticles(): Promise<number> {
+  console.log("[BATCH] Scanning for unannotated articles...");
+
   const articlesWithoutAnnotations = await db.articles.findMany({
     where: {
       article_annotations: null,
@@ -142,8 +163,19 @@ export async function classifyUnannotatedArticles(): Promise<number> {
     take: 100,
   });
 
+  if (articlesWithoutAnnotations.length === 0) {
+    console.log("[BATCH] Zero unannotated articles found.");
+    return 0;
+  }
+
+  const total = articlesWithoutAnnotations.length;
+  console.log(`[BATCH] Processing ${total} articles...`);
+
   let annotated = 0;
-  for (const article of articlesWithoutAnnotations) {
+  for (let i = 0; i < total; i++) {
+    const article = articlesWithoutAnnotations[i];
+    console.log(`[BATCH ${i + 1}/${total}] ID: ${article.id}`);
+
     try {
       const annotation = await classifyArticle({
         title: article.title,
@@ -160,8 +192,11 @@ export async function classifyUnannotatedArticles(): Promise<number> {
           dedupe_key: annotation.dedupe_key,
         },
       });
+
+      console.log(`[BATCH-SAVE] Saved annotations for ID: ${article.id}`);
       annotated++;
     } catch (err) {
+      console.error(`[BATCH-ERROR] Skipping ID ${article.id}`, err);
       logError("article-classification", err, {
         articleId: article.id,
         title: article.title,
@@ -170,5 +205,6 @@ export async function classifyUnannotatedArticles(): Promise<number> {
     }
   }
 
+  console.log(`[BATCH-DONE] Annotated ${annotated}/${total} articles.`);
   return annotated;
 }
