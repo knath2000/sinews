@@ -1254,25 +1254,20 @@ export default function FeedPage() {
           ))}
         </div>
       ) : !articles ? (
-        progressState ? (
-          <BriefProgressCard
-            progress={progressState.progress}
-            onRefresh={handleRefresh}
-          />
-        ) : (
-          <BriefProgressCard
-            progress={{
+        <BriefProgressCard
+          progress={
+            progressState?.progress || {
               phase: "starting",
-              message: "Starting your brief",
+              message: "Preparing articles",
               step: 1,
               totalSteps: 6,
               itemsCompleted: 0,
               itemsTotal: 0,
               updatedAt: "1970-01-01T00:00:00.000Z",
-            }}
-            onRefresh={handleRefresh}
-          />
-        )
+            }
+          }
+          onRefresh={handleRefresh}
+        />
       ) : hasArticles ? (
         <div className="space-y-4">
           {articles.map((article, index) => (

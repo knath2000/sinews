@@ -37,14 +37,34 @@ export async function GET(request: NextRequest) {
     const localDateStr = new Date().toLocaleDateString("en-CA", { timeZone: dbUser.timezone || "America/Los_Angeles" });
     const briefDate = new Date(localDateStr);
 
-    const inProgressBrief = await db.daily_briefs.findFirst({
+    // Use findUnique with the composite unique index to bypass Prisma Date-equality bugs
+    const inProgressBrief = await db.daily_briefs.findUnique({
       where: {
-        user_id: dbUser.id,
-        brief_date: briefDate,
-        status: { in: ["pending", "generating", "failed"] },
+        user_id_brief_date: {
+          user_id: dbUser.id,
+          brief_date: briefDate,
+        },
       },
       select: { id: true, status: true, progress_json: true },
     });
+
+    // Handle race condition: if it completed between our initial check and now, tell client to repoll
+    if (inProgressBrief?.status === "completed") {
+      return NextResponse.json({
+        generating: false,
+        status: "completed",
+        progress: {
+          phase: "finalizing",
+          message: PHASE_MESSAGES.finalizing,
+          step: 6,
+          totalSteps: 6,
+          itemsCompleted: 0,
+          itemsTotal: 0,
+          updatedAt: new Date().toISOString(),
+        },
+        pollAfterMs: 1000,
+      }, { status: 202 });
+    }
 
     // -- FAILED brief — re-trigger generation --
     if (inProgressBrief?.status === "failed") {
