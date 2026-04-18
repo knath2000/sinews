@@ -812,33 +812,16 @@ export async function generateDailyBriefForUser(
           provenance_json: JSON.stringify(provenance),
         });
       } catch (err) {
-        // Fallback: use raw data without generated summary
+        // Log the exact error and STOP the entire generation process
         logError("brief-item-generation", err, {
           articleId: candidate.article_id,
           title: candidate.title,
           source: candidate.source_name,
         });
-        const fallbackTopics = candidate.topics.filter((t) =>
-          profile.topicWeights.has(t)
-        );
-        const fallbackEntities = candidate.entities.filter((e) =>
-          profile.entityWeights.has(e)
-        );
-        const provenance = buildBriefItemProvenance({
-          matchedTopics: fallbackTopics,
-          matchedEntities: fallbackEntities,
-          safariTopicWeights: profile.safariHistoryImport.topicWeights,
-          safariTopicDomainWeights: profile.safariHistoryImport.topicDomainWeights,
-        });
-        briefItemsResult.push({
-          article_id: candidate.article_id,
-          rank: i + 1,
-          score: candidate.score,
-          summary: candidate.title,
-          tldr: "",
-          why_recommended: `Relevant to your interests`,
-          provenance_json: JSON.stringify(provenance),
-        });
+        console.error("OPENROUTER GENERATION ERROR:", err);
+
+        const errorDetail = err instanceof Error ? err.message : "Unknown AI error";
+        throw new Error(`AI Summary failed for "${candidate.title}": ${errorDetail}`);
       }
 
       // Update sub-progress during summary writing
@@ -912,7 +895,8 @@ export async function generateDailyBriefForUser(
       duration_ms: Date.now() - startTime,
     };
   } catch (err) {
-    // Mark brief as failed and persist failed progress
+    const errorMessage = err instanceof Error ? err.message : "Brief generation failed. Try again.";
+
     await db.daily_briefs.update({
       where: { id: brief.id },
       data: {
@@ -922,7 +906,7 @@ export async function generateDailyBriefForUser(
         version_tag: "v0.1-error",
         progress_json: JSON.stringify({
           phase: "failed",
-          message: "Brief generation failed. Try again.",
+          message: errorMessage,
           step: 0,
           totalSteps: 6,
           itemsCompleted: 0,
