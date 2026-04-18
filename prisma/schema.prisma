@@ -154,6 +154,7 @@ model daily_brief_items {
   rank            Int
   score           Float
   summary         String? @db.Text
+  tldr            String? @db.Text
   why_recommended String? @db.Text
   provenance_json String? @db.Text
 

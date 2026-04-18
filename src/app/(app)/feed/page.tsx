@@ -718,6 +718,11 @@ function ArticleCard({
         </div>
 
         <div>
+          {article.tldr && (
+            <p className="mb-2 text-sm font-semibold leading-6" style={{ color: "var(--ds-accent)" }}>
+              TL;DR: {article.tldr}
+            </p>
+          )}
           <h2 className="font-display text-[clamp(1.25rem,2vw,1.5rem)] font-semibold leading-[1.25] tracking-tight" style={{ color: "var(--ds-text)" }}>
             {article.title}
           </h2>

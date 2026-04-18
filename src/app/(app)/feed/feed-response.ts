@@ -10,6 +10,7 @@ export interface FeedArticleData {
   image_url: string | null;
   published_at: string | null;
   summary: string | null;
+  tldr: string | null;
   why_recommended: string | null;
   matched_signals: string[] | null;
   provenance: FeedArticleProvenance | null;
@@ -38,6 +39,7 @@ function parseFeedArticleData(value: unknown): FeedArticleData | null {
     !(article.image_url === null || typeof article.image_url === "string") ||
     !(article.published_at === null || typeof article.published_at === "string") ||
     !(article.summary === null || typeof article.summary === "string") ||
+    !(article.tldr === null || typeof article.tldr === "string") ||
     !(article.why_recommended === null || typeof article.why_recommended === "string") ||
     !(
       article.matched_signals === null ||
@@ -66,6 +68,7 @@ function parseFeedArticleData(value: unknown): FeedArticleData | null {
     image_url: article.image_url,
     published_at: article.published_at,
     summary: article.summary,
+    tldr: article.tldr ?? null,
     why_recommended: article.why_recommended,
     matched_signals: article.matched_signals,
     provenance,
@@ -107,6 +110,7 @@ export interface FeedReplacementArticle {
   image_url: string | null;
   published_at: string | null;
   summary: string | null;
+  tldr: string | null;
   why_recommended: string | null;
   matched_signals: string[] | null;
   provenance: SafariBriefProvenance | null;
@@ -158,6 +162,7 @@ export function parseReplacementArticle(value: unknown): FeedReplacementArticle 
     image_url: a.image_url,
     published_at: a.published_at,
     summary: a.summary,
+    tldr: typeof a.tldr === "string" ? a.tldr : null,
     why_recommended: typeof a.why_recommended === "string" ? a.why_recommended : null,
     matched_signals: matched,
     provenance,

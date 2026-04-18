@@ -22,6 +22,7 @@ interface FeedArticle {
   image_url: string | null;
   published_at: Date | null;
   summary: string | null;
+  tldr: string | null;
   why_recommended: string | null;
   matched_signals: string[] | null;
   provenance: ReturnType<typeof parseBriefItemProvenance>;
@@ -39,6 +40,7 @@ export interface FeedReplacementResult {
   image_url: string | null;
   published_at: string | null;
   summary: string | null;
+  tldr: string | null;
   why_recommended: string | null;
   matched_signals: string[] | null;
   provenance: ReturnType<typeof parseBriefItemProvenance>;
@@ -106,6 +108,10 @@ export async function loadTodaysBrief(userId: string): Promise<{
           image_url: article.image_url?.trim() || null,
           published_at: article.published_at ?? null,
           summary: sanitizeFeedSnippet(item.summary),
+          tldr: sanitizeFeedText(item.tldr, {
+            stripHtml: true,
+            maxLength: 100,
+          }),
           why_recommended: sanitizeFeedText(item.why_recommended, {
             stripHtml: true,
             maxLength: 200,
@@ -443,6 +449,7 @@ export async function findReplacementArticle(
 
   // Generate summary + why_recommended
   let summary: string;
+  let tldr: string;
   let whyRecommended: string;
   try {
     const matchedTopics = best.topics.filter((t) => profile.topicWeights.has(t));
@@ -455,9 +462,11 @@ export async function findReplacementArticle(
       matched_entities: matchedEntities,
     });
     summary = generated.summary;
+    tldr = generated.tldr;
     whyRecommended = generated.why_recommended;
   } catch {
     summary = best.title;
+    tldr = "";
     whyRecommended = "Relevant to your interests";
   }
 
@@ -477,6 +486,7 @@ export async function findReplacementArticle(
         article_id: best.article_id,
         score: best.score,
         summary,
+        tldr,
         why_recommended: whyRecommended,
         provenance_json: JSON.stringify(provenance),
       },
@@ -503,6 +513,7 @@ export async function findReplacementArticle(
     image_url: article.image_url?.trim() || null,
     published_at: best.published_at?.toISOString() ?? null,
     summary,
+    tldr,
     why_recommended: whyRecommended,
     matched_signals: signals,
     provenance,

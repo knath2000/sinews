@@ -25,7 +25,18 @@ const SUMMARY_MODEL =
 let _summaryClient: OpenAI | undefined;
 function getSummaryClient(): OpenAI {
   if (!_summaryClient) {
-    _summaryClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+    const isRouter = !!process.env.OPENROUTER_API_KEY;
+    _summaryClient = new OpenAI({
+      ...(isRouter ? {
+        baseURL: "https://openrouter.ai/api/v1",
+        defaultHeaders: {
+          "HTTP-Referer": "https://sinews.vercel.app",
+          "X-Title": "AI News Brief",
+        },
+      } : {}),
+      apiKey: apiKey,
+    });
   }
   return _summaryClient;
 }
@@ -54,6 +65,7 @@ export interface BriefItemInput {
 
 export interface GeneratedBriefItem {
   summary: string;
+  tldr: string;
   why_recommended: string;
 }
 
@@ -534,25 +546,23 @@ Article:
 - Source: ${input.article_source}
 - Snippet: ${input.article_snippet ?? "(no snippet)"}
 
-User context:
-- Matched topics: ${input.matched_topics.length > 0 ? input.matched_topics.join(", ") : "none"}
-- Matched entities: ${input.matched_entities.length > 0 ? input.matched_entities.join(", ") : "none"}
-
-Generate two fields:
-1. summary: A 2-3 sentence summary of the article. Must be under 80 words total. Focus on what happened and why it matters.
-2. why_recommended: A single sentence explaining why this article was selected for this user. Must be under 20 words. Reference their interests if possible.
+Generate three fields:
+1. tldr: A single, punchy sentence summarizing the core takeaway (under 20 words).
+2. summary: A 2-3 sentence expanded summary (under 80 words).
+3. why_recommended: A single sentence explaining why this article was selected (under 20 words).
 
 Return ONLY valid JSON matching this schema (no markdown, no extra text):
 {
-  "summary": "2-3 sentence summary under 80 words",
-  "why_recommended": "1 sentence reason under 20 words"
+  "tldr": "...",
+  "summary": "...",
+  "why_recommended": "..."
 }`;
 
   const response = await getSummaryClient().chat.completions.create({
     model: SUMMARY_MODEL,
     messages: [{ role: "user", content: prompt }],
     temperature: 0.5,
-    max_tokens: 200,
+    max_tokens: 250,
     response_format: { type: "json_object" },
   });
 
@@ -563,10 +573,15 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
 
   const parsed = JSON.parse(content) as Partial<GeneratedBriefItem>;
 
+  let tldr = (parsed.tldr ?? "").trim();
   let summary = (parsed.summary ?? "").trim();
   let why_recommended = (parsed.why_recommended ?? "").trim();
 
   // Enforce word limits
+  const tldrWords = tldr.split(/\s+/).filter(Boolean);
+  if (tldrWords.length > 20) {
+    tldr = tldrWords.slice(0, 20).join(" ") + ".";
+  }
   const summaryWords = summary.split(/\s+/).filter(Boolean);
   if (summaryWords.length > 80) {
     summary = summaryWords.slice(0, 80).join(" ") + ".";
@@ -576,7 +591,7 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
     why_recommended = reasonWords.slice(0, 20).join(" ") + ".";
   }
 
-  return { summary, why_recommended };
+  return { tldr, summary, why_recommended };
 }
 
 /**
@@ -749,6 +764,7 @@ export async function generateDailyBriefForUser(
       rank: number;
       score: number;
       summary: string;
+      tldr: string;
       why_recommended: string;
       provenance_json: string | null;
     }> = [];
@@ -788,6 +804,7 @@ export async function generateDailyBriefForUser(
           rank: i + 1,
           score: candidate.score,
           summary: generated.summary,
+          tldr: generated.tldr,
           why_recommended: generated.why_recommended,
           provenance_json: JSON.stringify(provenance),
         });
@@ -815,6 +832,7 @@ export async function generateDailyBriefForUser(
           rank: i + 1,
           score: candidate.score,
           summary: candidate.title,
+          tldr: "",
           why_recommended: `Relevant to your interests`,
           provenance_json: JSON.stringify(provenance),
         });
@@ -859,6 +877,7 @@ export async function generateDailyBriefForUser(
             rank: item.rank,
             score: item.score,
             summary: item.summary,
+            tldr: item.tldr,
             why_recommended: item.why_recommended,
             provenance_json: item.provenance_json,
           })),
