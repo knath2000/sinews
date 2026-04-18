@@ -169,16 +169,16 @@ model daily_brief_items {
 model feedback_events {
   id                  Int      @id @default(autoincrement())
   user_id             String   @db.Uuid
-  daily_brief_item_id Int
+  daily_brief_item_id Int?
   event_type          String   @db.Text
   created_at          DateTime @default(now()) @db.Timestamptz
   article_id          Int?
   topic               String?  @db.Text
   entity              String?  @db.Text
 
-  user             users             @relation(fields: [user_id], references: [id])
-  daily_brief_item daily_brief_items @relation(fields: [daily_brief_item_id], references: [id])
-  article          articles?         @relation(fields: [article_id], references: [id])
+  user             users             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  daily_brief_item daily_brief_items? @relation(fields: [daily_brief_item_id], references: [id], onDelete: Cascade)
+  article          articles?         @relation(fields: [article_id], references: [id], onDelete: Cascade)
 
   @@map("feedback_events")
 }
