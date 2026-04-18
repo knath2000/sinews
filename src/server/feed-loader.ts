@@ -8,6 +8,7 @@ import {
 } from "@/server/text-utils";
 import { parseBriefItemProvenance, buildBriefItemProvenance } from "@/lib/safari-insights";
 import { generateBriefItem } from "@/server/brief-engine";
+import { getTodayBriefDateForUser } from "@/lib/brief-date";
 
 /**
  * Types used by the feed page.
@@ -54,8 +55,7 @@ export async function loadTodaysBrief(userId: string): Promise<{
   articles: FeedArticle[];
   generatedAt: Date | null;
 } | null> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = await getTodayBriefDateForUser(userId);
 
   const brief = await db.daily_briefs.findFirst({
     where: {
@@ -346,22 +346,21 @@ export async function findReplacementArticle(
 
   const now = new Date();
 
-  // Load today's brief to get existing article IDs and the specific item
-  const brief = await db.daily_briefs.findFirst({
-    where: {
-      user_id: userId,
-      brief_date: {
-        gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-      },
-      status: "completed",
-    },
+  // Resolve the target brief via the brief item's FK rather than a date query.
+  const briefItem = await db.daily_brief_items.findUnique({
+    where: { id: briefItemId },
     include: {
-      daily_brief_items: {
-        orderBy: { rank: "asc" },
+      daily_brief: {
+        include: {
+          daily_brief_items: {
+            orderBy: { rank: "asc" },
+          },
+        },
       },
     },
   });
-  if (!brief) return null;
+  const brief = briefItem?.daily_brief;
+  if (!brief || brief.status !== "completed") return null;
 
   const targetItem = brief.daily_brief_items.find((i) => i.id === briefItemId);
   if (!targetItem) return null;

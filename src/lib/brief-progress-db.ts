@@ -7,6 +7,7 @@
 
 import { db } from "@/server/db/client";
 import type { BriefProgress } from "@/lib/brief-progress";
+import { getTodayBriefDateForUser, getUserBriefDateRange } from "@/lib/brief-date";
 
 /**
  * Update progress_json on the brief identified by userId + briefDate.
@@ -32,13 +33,12 @@ export async function updateBriefProgress(
 export async function loadBriefProgress(
   userId: string,
 ): Promise<{ progress: BriefProgress; status: string } | null> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const dateRange = await getUserBriefDateRange(userId);
 
   const brief = await db.daily_briefs.findFirst({
     where: {
       user_id: userId,
-      brief_date: { gte: today },
+      brief_date: dateRange,
       status: { in: ["pending", "generating", "failed"] },
     },
     select: { progress_json: true, status: true },

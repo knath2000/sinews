@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { loadTodaysBrief } from "@/server/feed-loader";
 import { requireAuth } from "@/lib/auth-server";
 import { applyRateLimit } from "@/middleware/rate-limit";
-import { generateDailyBriefForUser } from "@/server/brief-engine";
 import { PHASE_MESSAGES, type BriefProgress } from "@/lib/brief-progress";
 import { logError } from "@/server/error-logger";
+import { inngest } from "@/server/inngest/client";
+import { getUserBriefDateRangeFromTz } from "@/lib/brief-date";
 
 /**
  * GET /api/feed — returns today's 5-article brief.
@@ -37,17 +38,13 @@ export async function GET(request: NextRequest) {
     }
 
     // No completed brief — check for in-progress / failed brief
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const dateRange = getUserBriefDateRangeFromTz(dbUser.timezone);
     const { db } = await import("@/server/db/client");
 
     const inProgressBrief = await db.daily_briefs.findFirst({
       where: {
         user_id: dbUser.id,
-        brief_date: {
-          gte: today,
-          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
-        },
+        brief_date: dateRange,
         status: { in: ["pending", "generating", "failed"] },
       },
       select: { id: true, status: true, progress_json: true },
@@ -72,9 +69,15 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      generateDailyBriefForUser(dbUser.id).catch((err) => {
-        logError("brief-retry-after-failure", err, { userId: dbUser.id });
-      });
+      try {
+        await inngest.send({
+          name: "daily-brief.triggered",
+          data: { user_id: dbUser.id },
+        });
+      } catch (err) {
+        logError("brief-retry-inngest-failed", err, { userId: dbUser.id });
+        return NextResponse.json({ error: "Failed to queue generation" }, { status: 500 });
+      }
 
       return NextResponse.json(
         {
@@ -101,10 +104,16 @@ export async function GET(request: NextRequest) {
       : null;
 
     if (!inProgressBrief) {
-      // Trigger generation fire-and-forget
-      generateDailyBriefForUser(dbUser.id).catch((err) => {
-        logError("background-brief-generation", err, { userId: dbUser.id });
-      });
+      // Trigger durable generation via Inngest
+      try {
+        await inngest.send({
+          name: "daily-brief.triggered",
+          data: { user_id: dbUser.id },
+        });
+      } catch (err) {
+        logError("brief-generation-inngest-failed", err, { userId: dbUser.id });
+        return NextResponse.json({ error: "Failed to queue generation" }, { status: 500 });
+      }
     }
 
     const progress: BriefProgress = existingProgress ?? {
