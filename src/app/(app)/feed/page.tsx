@@ -140,12 +140,14 @@ function DesktopSidebar({
   articleCount,
   topics,
   personalization,
+  mounted,
 }: {
   loading: boolean;
   generatedAt: string | null;
   articleCount: number;
   topics: string[];
   personalization: PersonalizationData;
+  mounted: boolean;
 }) {
   const pathname = usePathname();
 
@@ -176,8 +178,8 @@ function DesktopSidebar({
           />
           <StatBlock
             label="Updated"
-            value={generatedAt ? formatTime(generatedAt) : "Pending"}
-            detail={generatedAt ? formatDateLabel(generatedAt) : "Regenerating"}
+            value={mounted && generatedAt ? formatTime(generatedAt) : "…"}
+            detail={mounted && generatedAt ? formatDateLabel(generatedAt) : "Regenerating"}
           />
         </div>
 
@@ -602,10 +604,12 @@ function ArticleCard({
   article,
   index,
   onDownvote,
+  mounted,
 }: {
   article: FeedArticleData;
   index: number;
   onDownvote?: (article: FeedArticleData) => void;
+  mounted: boolean;
 }) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
@@ -686,7 +690,7 @@ function ArticleCard({
           <span className="rounded-full bg-zinc-950 px-3 py-1 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-950">
             #{article.rank}
           </span>
-          {article.published_at ? (
+          {article.published_at && mounted ? (
             <span className="text-muted inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium" style={{ backgroundColor: "var(--surface-status-bg)", border: "1px solid var(--surface-border-white)" }}>
               <Clock className="h-3.5 w-3.5" />
               {formatTime(article.published_at)}
@@ -1098,6 +1102,7 @@ export default function FeedPage() {
           articleCount={hasArticles ? articles.length : 0}
           topics={topics}
           personalization={personalization}
+          mounted={mounted}
         />
       }
     >
@@ -1209,7 +1214,7 @@ export default function FeedPage() {
       ) : hasArticles ? (
         <div className="space-y-4">
           {articles.map((article, index) => (
-            <ArticleCard key={`${article.brief_item_id}-${article.id}`} article={article} index={index} onDownvote={handleDownvote} />
+            <ArticleCard key={`${article.brief_item_id}-${article.id}`} article={article} index={index} onDownvote={handleDownvote} mounted={mounted} />
           ))}
           {mounted ? (
             <ReadingHistory
