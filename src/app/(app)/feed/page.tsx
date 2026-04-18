@@ -22,7 +22,6 @@ import {
   normalizeFeedPayload,
   parseReplacementArticle,
   type FeedArticleData,
-  type FeedReplacementArticle,
 } from "./feed-response";
 import { humanizeSafariTopic, joinHumanList } from "@/lib/safari-insights";
 import { useTheme } from "@/lib/theme-provider";
@@ -474,6 +473,11 @@ function ArticleCard({
 }) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
+  // Reset local feedback state when a replacement article is swapped in.
+  // The parent must use a key that changes when the article changes (e.g.
+  // `article.brief_item_id-${article.id}`). React will unmount/remount the
+  // component, naturally clearing `feedback` state.
+
   const handleFeedback = useCallback(
     (type: "thumbs_up" | "thumbs_down") => {
       setFeedback(type === "thumbs_up" ? "up" : "down");
@@ -493,7 +497,7 @@ function ArticleCard({
         }).catch(() => {});
       }
     },
-    [article.brief_item_id, article.id, article, onDownvote]
+    [article, onDownvote]
   );
 
   const accent = fallbackGradients[index % fallbackGradients.length];
@@ -846,27 +850,34 @@ export default function FeedPage() {
         };
         if (data.replaced && data.article) {
           const replacement = parseReplacementArticle(data.article);
-          if (replacement && articles) {
+          if (replacement) {
+            const newGeneratedAt = new Date().toISOString();
+
             setArticles((prev) => {
               if (!prev) return prev;
               return prev.map((a) =>
                 a.brief_item_id === disliked.brief_item_id ? replacement : a
               );
             });
-            // Update cache
-            setCachedBrief({
-              articles: articles.map((a) =>
-                a.brief_item_id === disliked.brief_item_id ? replacement : a
-              ),
-              generatedAt: generatedAt ?? new Date().toISOString(),
-            });
+
+            setGeneratedAt(newGeneratedAt);
+
+            const cached = getCachedBrief();
+            if (cached) {
+              setCachedBrief({
+                articles: cached.articles.map((a) =>
+                  a.brief_item_id === disliked.brief_item_id ? replacement : a
+                ),
+                generatedAt: newGeneratedAt,
+              });
+            }
           }
         }
       } catch {
         // Silently fail — the feedback event was still recorded server-side
       }
     },
-    [articles, generatedAt]
+    []
   );
 
   return (
@@ -967,7 +978,7 @@ export default function FeedPage() {
       ) : hasArticles ? (
         <div className="space-y-4">
           {articles.map((article, index) => (
-            <ArticleCard key={article.rank} article={article} index={index} onDownvote={handleDownvote} />
+            <ArticleCard key={`${article.brief_item_id}-${article.id}`} article={article} index={index} onDownvote={handleDownvote} />
           ))}
           <ReadingHistory
             items={personalization.recentReading}

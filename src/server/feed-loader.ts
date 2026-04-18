@@ -261,20 +261,15 @@ export async function submitFeedbackAndSignals(
 
     const actualArticleId = articleId ?? briefItem?.article?.id ?? null;
 
-    // 3. Delete any prior interest_signals derived from this brief item
-    const signalReferences = [
-      ...topics.map((t) => `feedback:${briefItemId}:topic:${t}`),
-      ...entities.slice(0, 3).map((e) => `feedback:${briefItemId}:entity:${e}`),
-    ];
-    if (signalReferences.length > 0) {
-      await tx.interest_signals.deleteMany({
-        where: {
-          user_id: userId,
-          signal_type: { in: ["thumbs_up", "thumbs_down"] },
-          source_reference: { in: signalReferences },
-        },
-      });
-    }
+    // 3. Delete ALL prior interest_signals derived from this brief item
+    // (covers stale signals from a previously-replaced article in this slot)
+    await tx.interest_signals.deleteMany({
+      where: {
+        user_id: userId,
+        signal_type: { in: ["thumbs_up", "thumbs_down"] },
+        source_reference: { startsWith: `feedback:${briefItemId}:` },
+      },
+    });
 
     // 4. Create the feedback event
     await tx.feedback_events.create({

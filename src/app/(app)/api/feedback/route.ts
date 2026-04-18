@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
   // Generic feedback rate limit: 60 requests per 60 seconds
   const rl = await applyRateLimit(
-    request as any,
+    request,
     "feedback",
     { limit: 60, windowMs: 60_000, identifyBy: "user" },
   );
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     // Stricter limit for thumbs_down (replacement work): 10 per hour
     if (eventType === "thumbs_down") {
       const downRl = await applyRateLimit(
-        request as any,
+        request,
         "feedback-down",
         { limit: 10, windowMs: 60 * 60 * 1000, identifyBy: "user" },
       );
