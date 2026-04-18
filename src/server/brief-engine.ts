@@ -51,6 +51,8 @@ export interface ScoredCandidate {
   quality_score: number;
   dedupe_key: string;
   cluster_id: string | null;
+  cached_summary: string | null;
+  cached_tldr: string | null;
   /** Composite score 0-1 */
   score: number;
 }
@@ -274,6 +276,8 @@ export function scoreCandidates(
     quality_score: number;
     dedupe_key: string;
     cluster_id: string | null;
+    cached_summary: string | null;
+    cached_tldr: string | null;
   }>,
   topicWeights: Map<string, number>,
   entityWeights: Map<string, number>,
@@ -393,6 +397,8 @@ export function scoreCandidates(
       quality_score: s.quality_score,
       dedupe_key: s.dedupe_key,
       cluster_id: s.cluster_id,
+      cached_summary: s.cached_summary,
+      cached_tldr: s.cached_tldr,
       score: Math.round(score * 1000) / 1000,
     };
   });
@@ -417,6 +423,8 @@ export async function filterBySourcePolicy(
     quality_score: number;
     dedupe_key: string;
     cluster_id: string | null;
+    cached_summary: string | null;
+    cached_tldr: string | null;
     provider: string;
     license_class: string | null;
     is_fixture: boolean;
@@ -472,6 +480,8 @@ export async function getCandidates(
     quality_score: number;
     dedupe_key: string;
     cluster_id: string | null;
+    cached_summary: string | null;
+    cached_tldr: string | null;
     provider: string;
     license_class: string | null;
     is_fixture: boolean;
@@ -515,6 +525,8 @@ export async function getCandidates(
     quality_score: a.quality_score ?? 3,
     dedupe_key: a.dedupe_key ?? "",
     cluster_id: a.article.cluster_id,
+    cached_summary: a.summary ?? null,
+    cached_tldr: a.tldr ?? null,
     provider: a.article.provider,
     license_class: a.article.license_class,
     is_fixture: a.article.is_fixture,
@@ -775,12 +787,6 @@ export async function generateDailyBriefForUser(
     for (let i = 0; i < top5.length; i++) {
       const candidate = top5[i];
       try {
-        // Fetch the article snippet
-        const article = await db.articles.findUnique({
-          where: { id: candidate.article_id },
-          select: { snippet: true },
-        });
-
         const matchedTopics = candidate.topics.filter((t) =>
           profile.topicWeights.has(t)
         );
@@ -794,21 +800,51 @@ export async function generateDailyBriefForUser(
           safariTopicDomainWeights: profile.safariHistoryImport.topicDomainWeights,
         });
 
-        const generated = await generateBriefItem({
-          article_title: candidate.title,
-          article_source: candidate.source_name,
-          article_snippet: sanitizeFeedSnippet(article?.snippet ?? null),
-          matched_topics: matchedTopics,
-          matched_entities: matchedEntities,
-        });
+        let summary = candidate.cached_summary;
+        let tldr = candidate.cached_tldr;
+        let why_recommended = "";
+
+        // If we don't have a cached summary, call OpenRouter and save it globally
+        if (!summary || !tldr) {
+          const article = await db.articles.findUnique({
+            where: { id: candidate.article_id },
+            select: { snippet: true },
+          });
+          const generated = await generateBriefItem({
+            article_title: candidate.title,
+            article_source: candidate.source_name,
+            article_snippet: sanitizeFeedSnippet(article?.snippet ?? null),
+            matched_topics: matchedTopics,
+            matched_entities: matchedEntities,
+          });
+
+          summary = generated.summary;
+          tldr = generated.tldr;
+          why_recommended = generated.why_recommended;
+
+          // Save to global cache for the next user
+          await db.article_annotations.update({
+            where: { article_id: candidate.article_id },
+            data: { summary, tldr },
+          });
+        } else {
+          // Cache hit: skip AI and generate a quick recommendation reason
+          if (matchedTopics.length > 0) {
+            why_recommended = `Selected for you based on your interest in ${matchedTopics[0].replace(/_/g, " ")}.`;
+          } else if (matchedEntities.length > 0) {
+            why_recommended = `Included because you follow updates regarding ${matchedEntities[0].replace(/_/g, " ")}.`;
+          } else {
+            why_recommended = "Selected based on your recent reading habits.";
+          }
+        }
 
         briefItemsResult.push({
           article_id: candidate.article_id,
           rank: i + 1,
           score: candidate.score,
-          summary: generated.summary,
-          tldr: generated.tldr,
-          why_recommended: generated.why_recommended,
+          summary: summary!,
+          tldr: tldr!,
+          why_recommended,
           provenance_json: JSON.stringify(provenance),
         });
       } catch (err) {

@@ -123,6 +123,8 @@ model article_annotations {
   entities_json String? @db.Text
   quality_score Int?
   dedupe_key    String? @db.Text
+  summary       String? @db.Text
+  tldr          String? @db.Text
 
   article articles @relation(fields: [article_id], references: [id], onDelete: Cascade)
 
@@ -169,7 +171,7 @@ model daily_brief_items {
 model feedback_events {
   id                  Int      @id @default(autoincrement())
   user_id             String   @db.Uuid
-  daily_brief_item_id Int?
+  daily_brief_item_id Int
   event_type          String   @db.Text
   created_at          DateTime @default(now()) @db.Timestamptz
   article_id          Int?
@@ -177,7 +179,7 @@ model feedback_events {
   entity              String?  @db.Text
 
   user             users             @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  daily_brief_item daily_brief_items? @relation(fields: [daily_brief_item_id], references: [id], onDelete: Cascade)
+  daily_brief_item daily_brief_items @relation(fields: [daily_brief_item_id], references: [id], onDelete: Cascade)
   article          articles?         @relation(fields: [article_id], references: [id], onDelete: Cascade)
 
   @@map("feedback_events")
