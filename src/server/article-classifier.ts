@@ -5,6 +5,8 @@ import { logError } from "./error-logger";
 
 let client: OpenAI | null = null;
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 function getClient(): OpenAI {
   if (!client) {
     const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
@@ -184,10 +186,16 @@ export async function classifyUnannotatedArticles(): Promise<number> {
   }
 
   const total = articlesWithoutAnnotations.length;
-  console.log(`[BATCH] Processing ${total} articles...`);
+  console.log(`[BATCH] Processing ${total} articles with a 2s delay between each...`);
 
   let annotated = 0;
   for (let i = 0; i < total; i++) {
+    // Pause to avoid triggering OpenRouter rate limits
+    if (i > 0) {
+      console.log("[BATCH] Throttling: Waiting 2000ms before next item...");
+      await sleep(2000);
+    }
+
     const article = articlesWithoutAnnotations[i];
     console.log(`[BATCH ${i + 1}/${total}] ID: ${article.id}`);
 
