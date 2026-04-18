@@ -934,7 +934,8 @@ export default function FeedPage() {
         }
 
         return { ok: false };
-      } catch {
+      } catch (err) {
+        console.error("[FEED_POLL] Network or Parse Error:", err);
         if (mounted) {
           setFeedError(true);
           setProgressState(null);
