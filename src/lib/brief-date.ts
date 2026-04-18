@@ -22,17 +22,41 @@ export function getTodayBriefDate(timeZone: string): Date {
 
 /**
  * Compute yesterday's brief date for novelty scoring.
- * Subtracts 24h from the user's local *start of day* (which is already UTC
- * midnight of that date), then re-reads the resulting UTC instant in the user's
- * timezone.  Because we subtract exactly one day from a midnight anchor, this
- * yields the correct calendar day in all DST / host-timezone combinations.
+ *
+ * Uses Intl.DateTimeFormat parts to get the user's current calendar Y/M/D,
+ * then subtracts one day using integer arithmetic and formats the result as
+ * an ISO date string.  No Date constructor round-trips, no host-timezone
+ * dependency — works correctly on any host and across DST transitions.
  */
 export function getYesterdayBriefDate(timeZone: string): Date {
-  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone });
-  const todayUTC = new Date(todayStr); // YYYY-MM-DDT00:00:00Z — no host-TZ ambiguity
-  const yesterdayUTC = new Date(todayUTC.getTime() - 24 * 60 * 60 * 1000);
-  const yesterdayStr = yesterdayUTC.toLocaleDateString("en-CA", { timeZone });
-  return new Date(yesterdayStr);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(new Date());
+  const get = (type: string) => {
+    const p = parts.find((p) => p.type === type);
+    return p ? parseInt(p.value, 10) : 1;
+  };
+  const y = get("year");
+  const m = get("month") - 1;
+  const d = get("day");
+
+  // Pure calendar subtraction: one day before (y, m, d)
+  const d1 = d - 1;
+  if (d1 > 0) return new Date(`${y}-${String(m + 1).padStart(2, "0")}-${String(d1).padStart(2, "0")}`);
+
+  // Go to previous month
+  const m1 = m - 1;
+  if (m1 >= 0) {
+    const dim = new Date(Date.UTC(y, m1 + 1, 0)).getUTCDate();
+    return new Date(`${y}-${String(m1 + 1).padStart(2, "0")}-${String(dim).padStart(2, "0")}`);
+  }
+
+  // Wrap to previous year, December 31
+  return new Date(`${y - 1}-12-31`);
 }
 
 /**
