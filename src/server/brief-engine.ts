@@ -11,6 +11,8 @@ import { normalizePublicImageUrl } from "./url-utils";
 import { classifyArticle } from "./article-classifier";
 import { sanitizeFeedSnippet, sanitizeFeedTitle } from "./text-utils";
 import { buildBriefItemProvenance } from "@/lib/safari-insights";
+import { updateBriefProgress, PHASE_MESSAGES } from "@/server/feed-loader";
+
 
 const SUMMARY_MODEL =
   process.env.OPENAI_SUMMARY_MODEL || "gpt-4o-mini";
@@ -637,8 +639,28 @@ export async function generateDailyBriefForUser(
   });
 
   try {
-    // Build user profile (includes feedback signals)
+    // Phase 1: starting — already done at create/upsert above
+    await updateBriefProgress(userId, briefDate, {
+      phase: "starting",
+      message: PHASE_MESSAGES.starting,
+      step: 1,
+      totalSteps: 6,
+      itemsCompleted: 0,
+      itemsTotal: 0,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Phase 2: building_profile
     const profile = await buildUserProfile(userId);
+    await updateBriefProgress(userId, briefDate, {
+      phase: "building_profile",
+      message: PHASE_MESSAGES.building_profile,
+      step: 2,
+      totalSteps: 6,
+      itemsCompleted: 0,
+      itemsTotal: 0,
+      updatedAt: new Date().toISOString(),
+    });
 
     // Fetch yesterday's brief topics for novelty bonus
     const yesterdayBriefTopics = await getYesterdayBriefTopics(userId);
@@ -653,6 +675,17 @@ export async function generateDailyBriefForUser(
       candidates = await getCandidates(since, 50);
     }
 
+    // Phase 3: loading_candidates (done after candidates are available)
+    await updateBriefProgress(userId, briefDate, {
+      phase: "loading_candidates",
+      message: PHASE_MESSAGES.loading_candidates,
+      step: 3,
+      totalSteps: 6,
+      itemsCompleted: 0,
+      itemsTotal: 0,
+      updatedAt: new Date().toISOString(),
+    });
+
     if (candidates.length === 0) {
       const error = new Error("No eligible live articles available for brief generation");
       logError("brief-generation-empty-candidate-set", error, { userId });
@@ -661,6 +694,17 @@ export async function generateDailyBriefForUser(
 
     // Apply source quality floor filtering (gated by feature flag)
     candidates = await filterBySourcePolicy(candidates);
+
+    // Phase 4: ranking_candidates
+    await updateBriefProgress(userId, briefDate, {
+      phase: "ranking_candidates",
+      message: PHASE_MESSAGES.ranking_candidates,
+      step: 4,
+      totalSteps: 6,
+      itemsCompleted: 0,
+      itemsTotal: 0,
+      updatedAt: new Date().toISOString(),
+    });
 
     // Score and rank (with novelty bonus and diversity penalty)
     const scored = scoreCandidates(
@@ -684,6 +728,17 @@ export async function generateDailyBriefForUser(
 
     // Top 5
     const top5 = deduped.slice(0, 5);
+
+    // Phase 5: writing_summaries — initial
+    await updateBriefProgress(userId, briefDate, {
+      phase: "writing_summaries",
+      message: PHASE_MESSAGES.writing_summaries,
+      step: 5,
+      totalSteps: 6,
+      itemsCompleted: 0,
+      itemsTotal: top5.length,
+      updatedAt: new Date().toISOString(),
+    });
 
     // Generate summaries for top items
     const briefItemsResult: Array<{
@@ -761,7 +816,29 @@ export async function generateDailyBriefForUser(
           provenance_json: JSON.stringify(provenance),
         });
       }
+
+      // Update sub-progress during summary writing
+      await updateBriefProgress(userId, briefDate, {
+        phase: "writing_summaries",
+        message: PHASE_MESSAGES.writing_summaries,
+        step: 5,
+        totalSteps: 6,
+        itemsCompleted: i + 1,
+        itemsTotal: top5.length,
+        updatedAt: new Date().toISOString(),
+      });
     }
+
+    // Phase 6: finalizing
+    await updateBriefProgress(userId, briefDate, {
+      phase: "finalizing",
+      message: PHASE_MESSAGES.finalizing,
+      step: 6,
+      totalSteps: 6,
+      itemsCompleted: 0,
+      itemsTotal: 0,
+      updatedAt: new Date().toISOString(),
+    });
 
     // Update brief with items
     await db.$transaction(async (tx) => {
@@ -793,6 +870,7 @@ export async function generateDailyBriefForUser(
           generated_at: new Date(),
           generation_duration_ms: Date.now() - startTime,
           candidate_count: candidates.length,
+          progress_json: null,
         },
       });
     });
@@ -809,7 +887,7 @@ export async function generateDailyBriefForUser(
       duration_ms: Date.now() - startTime,
     };
   } catch (err) {
-    // Mark brief as failed
+    // Mark brief as failed and persist failed progress
     await db.daily_briefs.update({
       where: { id: brief.id },
       data: {
@@ -817,6 +895,15 @@ export async function generateDailyBriefForUser(
         generated_at: new Date(),
         generation_duration_ms: Date.now() - startTime,
         version_tag: "v0.1-error",
+        progress_json: JSON.stringify({
+          phase: "failed",
+          message: "Brief generation failed. Try again.",
+          step: 0,
+          totalSteps: 6,
+          itemsCompleted: 0,
+          itemsTotal: 0,
+          updatedAt: new Date().toISOString(),
+        }),
       },
     });
     logError("brief-generation", err, { briefId: brief.id, userId });

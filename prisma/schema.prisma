@@ -136,6 +136,7 @@ model daily_briefs {
   generation_duration_ms Int?
   candidate_count        Int?
   version_tag            String    @default("v0.1") @db.Text
+  progress_json          String?   @db.Text
 
   user              users               @relation(fields: [user_id], references: [id])
   daily_brief_items daily_brief_items[]

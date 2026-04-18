@@ -28,6 +28,22 @@ import { useTheme } from "@/lib/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PageShell } from "@/components/page-shell";
 import { isProbablyArticleImageUrl } from "@/lib/image-suitability";
+import { BRIEF_PHASES, PHASE_MESSAGES, PHASE_ORDER } from "@/server/feed-loader";
+
+interface BriefProgressState {
+  generating: boolean;
+  status: "pending" | "generating" | "failed";
+  progress: {
+    phase: string;
+    message: string;
+    step: number;
+    totalSteps: number;
+    itemsCompleted: number;
+    itemsTotal: number;
+    updatedAt: string;
+  };
+  pollAfterMs: number;
+}
 
 const sidebarLinks = [
   { href: "/feed", label: "Feed" },
@@ -318,26 +334,120 @@ function SkeletonCard() {
   );
 }
 
-function GeneratingState() {
+function BriefProgressCard({
+  progress,
+  onRefresh,
+}: {
+  progress: BriefProgressState["progress"];
+  onRefresh: () => void;
+}) {
+  const isFailed = progress.phase === "failed";
+  const isWritingSummaries = progress.phase === "writing_summaries";
+  const currentOrder = PHASE_ORDER[progress.phase] ?? 0;
+
+  if (isFailed) {
+    return (
+      <section className="rounded-[var(--radius-card)] border border-rose-200 bg-rose-50 p-8 text-center shadow-[var(--shadow-soft)] dark:border-rose-900/40 dark:bg-rose-950/20">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400">
+          <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h2 className="text-strong mt-4 text-2xl font-semibold tracking-tight">
+          {progress.message}
+        </h2>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="mt-6 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+        >
+          Try again
+          <ArrowUpRight className="h-4 w-4" />
+        </button>
+      </section>
+    );
+  }
+
   return (
-    <section className="rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] p-8 text-center shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)]">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
-        <Sparkles className="h-6 w-6" />
+    <section className="rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] p-6 shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)] sm:p-8">
+      {/* Spinner + headline */}
+      <div className="text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
+          <svg className="h-7 w-7 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+        <h2 className="text-strong mt-4 text-xl font-semibold tracking-tight">
+          {progress.message}
+        </h2>
+
+        {/* Step indicator */}
+        {progress.totalSteps > 0 && (
+          <p className="text-muted mt-2 text-sm">
+            Step {progress.step} of {progress.totalSteps}
+          </p>
+        )}
+
+        {/* Sub-status for writing summaries phase */}
+        {isWritingSummaries && progress.itemsTotal > 0 && (
+          <p className="text-muted mt-1 text-xs">
+            {progress.itemsCompleted} of {progress.itemsTotal} summaries written
+          </p>
+        )}
       </div>
-      <h2 className="text-strong mt-4 text-2xl font-semibold tracking-tight">
-        Generating your briefing
-      </h2>
-      <p className="text-muted mx-auto mt-3 max-w-lg text-sm leading-relaxed">
-        We’re ranking stories, checking imagery, and writing the summaries. Refresh in a moment.
-      </p>
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="mt-6 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
-      >
-        Refresh now
-        <ArrowUpRight className="h-4 w-4" />
-      </button>
+
+      {/* Phase checklist */}
+      <div className="mt-6 space-y-1.5">
+        {BRIEF_PHASES.map((phase) => {
+          const order = PHASE_ORDER[phase];
+          const isComplete = order < currentOrder;
+          const isCurrent = order === currentOrder;
+
+          return (
+            <div
+              key={phase}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${
+                isCurrent
+                  ? "bg-sky-50/80 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300"
+                  : isComplete
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-zinc-400"
+              }`}
+            >
+              {isComplete ? (
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : isCurrent ? (
+                <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <span className="h-4 w-4 shrink-0 text-zinc-300">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <circle cx="12" cy="12" r="6" />
+                  </svg>
+                </span>
+              )}
+              <span className="truncate">{PHASE_MESSAGES[phase]}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Refresh button */}
+      <div className="mt-6 text-center">
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-muted inline-flex items-center gap-1 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-xs font-medium transition hover:bg-white/80"
+        >
+          Refresh now
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </section>
   );
 }
@@ -670,6 +780,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [articles, setArticles] = useState<FeedArticleData[] | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<BriefProgressState | null>(null);
   const [consentNeeded, setConsentNeeded] = useState(false);
   const [acceptingConsent, setAcceptingConsent] = useState(false);
   const [displayName, setDisplayName] = useState<string>("");
@@ -684,12 +795,13 @@ export default function FeedPage() {
   });
   const { isDark, toggleDark, loading: themeLoading } = useTheme();
 
+  // Check consent first, then start continuous polling
   useEffect(() => {
     let mounted = true;
-    let pollCount = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let failed = false;
 
-    async function fetchBrief(): Promise<boolean> {
+    async function fetchBrief(): Promise<{ ok: boolean }> {
       try {
         const res = await fetch("/api/feed");
         if (res.ok) {
@@ -699,25 +811,54 @@ export default function FeedPage() {
             setArticles(normalized.articles);
             setGeneratedAt(normalized.generatedAt);
             setCachedBrief(normalized);
+            setProgressState(null);
           }
-          return !!normalized;
+          return { ok: !!normalized };
         }
 
         if (res.status === 202) {
+          const data = await res.json() as BriefProgressState;
           if (mounted) {
             setArticles(null);
             setGeneratedAt(null);
+            setProgressState(data);
           }
-          return false;
+          return { ok: false };
         }
 
-        return false;
+        if (res.status === 503) {
+          const data = await res.json() as BriefProgressState;
+          if (mounted) {
+            setProgressState(data);
+            failed = true;
+          }
+          return { ok: false };
+        }
+
+        return { ok: false };
       } catch {
-        return false;
+        return { ok: false };
       }
     }
 
+    function schedulePoll(ms: number, start: number) {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        timer = undefined;
+        if (!mounted || failed) return; // stop on failure or unmount
+        const { ok } = await fetchBrief();
+        if (ok) return; // brief loaded, polling stops
+        if (failed) return;
+        const elapsed = Date.now() - start;
+        const nextMs = elapsed >= 60_000 ? 8000 : 3000;
+        schedulePoll(nextMs, start);
+      }, ms);
+    }
+
+    const pollStart = Date.now();
+
     async function load() {
+      // Step 1: Check consent
       try {
         const consentRes = await fetch("/api/settings/consent");
         if (consentRes.ok) {
@@ -730,35 +871,21 @@ export default function FeedPage() {
         }
       } catch {}
 
+      // Step 2: Show cached brief immediately if available
       const cached = getCachedBrief();
       if (cached && cached.articles.length > 0) {
         setArticles(cached.articles);
         setGeneratedAt(cached.generatedAt);
         setLoading(false);
-
-        while (mounted && pollCount < 15) {
-          pollCount += 1;
-          if (await fetchBrief()) return;
-          await new Promise<void>((resolve) => {
-            timer = setTimeout(resolve, 5000);
-          });
-        }
-
-        return;
       }
 
-      while (mounted && pollCount < 15) {
-        pollCount += 1;
-        if (await fetchBrief()) {
-          setLoading(false);
-          return;
-        }
-        await new Promise<void>((resolve) => {
-          timer = setTimeout(resolve, 5000);
-        });
+      // Step 3: Fetch (and keep polling if not ready)
+      const { ok } = await fetchBrief();
+      if (!ok && mounted) {
+        setLoading(false);
+        const delayMs = (Date.now() - pollStart) >= 60_000 ? 8000 : 3000;
+        schedulePoll(delayMs, pollStart);
       }
-
-      setLoading(false);
     }
 
     load();
@@ -974,7 +1101,25 @@ export default function FeedPage() {
           ))}
         </div>
       ) : !articles ? (
-        <GeneratingState />
+        progressState ? (
+          <BriefProgressCard
+            progress={progressState.progress}
+            onRefresh={() => setProgressState({ ...progressState })}
+          />
+        ) : (
+          <BriefProgressCard
+            progress={{
+              phase: "starting",
+              message: "Starting your brief",
+              step: 1,
+              totalSteps: 6,
+              itemsCompleted: 0,
+              itemsTotal: 0,
+              updatedAt: new Date().toISOString(),
+            }}
+            onRefresh={() => window.location.reload()}
+          />
+        )
       ) : hasArticles ? (
         <div className="space-y-4">
           {articles.map((article, index) => (
@@ -986,7 +1131,18 @@ export default function FeedPage() {
           />
         </div>
       ) : (
-        <GeneratingState />
+        <BriefProgressCard
+          progress={{
+            phase: "starting",
+            message: "Preparing articles",
+            step: 1,
+            totalSteps: 6,
+            itemsCompleted: 0,
+            itemsTotal: 0,
+            updatedAt: new Date().toISOString(),
+          }}
+          onRefresh={() => window.location.reload()}
+        />
       )}
     </PageShell>
   );
