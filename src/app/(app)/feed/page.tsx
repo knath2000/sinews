@@ -886,6 +886,9 @@ export default function FeedPage() {
     let failed = false;
 
     async function fetchBrief(): Promise<{ ok: boolean }> {
+      const pollTime = new Date().toLocaleTimeString();
+      console.log(`[FEED_POLL] Fetching /api/feed at ${pollTime}`);
+
       try {
         const res = await fetch(`/api/feed?_t=${Date.now()}`, {
           cache: "no-store",
@@ -894,8 +897,12 @@ export default function FeedPage() {
             "Pragma": "no-cache",
           },
         });
+
+        console.log(`[FEED_POLL] Response Status: ${res.status}`);
+
         if (res.ok) {
           const data = await res.json();
+          console.log("[FEED_POLL] 200 OK - Brief Data Received:", data);
           const normalized = normalizeFeedPayload(data);
           if (normalized && mounted) {
             setArticles(normalized.articles);
@@ -910,6 +917,10 @@ export default function FeedPage() {
 
         if (res.status === 202) {
           const data = await res.json() as BriefProgressState;
+          console.log(
+            `[FEED_POLL] 202 Accepted - Phase: ${data.progress?.phase}, Step: ${data.progress?.step}`,
+            data
+          );
           if (mounted) {
             setProgressState(data);
             setFeedError(false);
@@ -919,6 +930,7 @@ export default function FeedPage() {
 
         if (res.status === 503) {
           const data = await res.json() as BriefProgressState;
+          console.error("[FEED_POLL] 503 Failed - Data:", data);
           if (mounted) {
             setProgressState(data);
             setFeedError(false);
@@ -927,6 +939,7 @@ export default function FeedPage() {
           return { ok: false };
         }
 
+        console.warn(`[FEED_POLL] Unhandled status >= 500:`, res.status);
         if (res.status >= 500 && mounted) {
           setFeedError(true);
           setProgressState(null);
