@@ -74,6 +74,7 @@ export default function SettingsPage({
     } | null;
   }
   const [feedbackHistory, setFeedbackHistory] = useState<FeedbackItem[]>([]);
+  const [activeSignalsCount, setActiveSignalsCount] = useState(0);
 
   // --- Safari History Import state ---
   const [safariImport, setSafariImport] = useState<{
@@ -176,6 +177,14 @@ export default function SettingsPage({
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.feedback) setFeedbackHistory(data.feedback);
+      })
+      .catch(() => {});
+
+    // Fetch active signals count
+    fetch("/api/settings/active-signals/count")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (typeof data?.count === "number") setActiveSignalsCount(data.count);
       })
       .catch(() => {});
   }, [loadSafariImport]);
@@ -409,6 +418,7 @@ export default function SettingsPage({
       sidebar={
         <SettingsSidebar
           activeAccountCount={activeAccountCount}
+          activeSignalsCount={activeSignalsCount}
           briefHourLabel={briefHourLabel}
           profileReady={profileReady}
           safariStatusLabel={safariStatusLabel}
@@ -438,6 +448,7 @@ export default function SettingsPage({
           <div className="grid grid-cols-2 gap-3 sm:w-[280px]">
             <MetricCard label="Accounts" value={activeAccountCount} detail="linked" />
             <MetricCard label="Topics" value={topics.size} detail="active" />
+            <MetricCard label="Signals" value={activeSignalsCount} detail="active now" />
           </div>
         </div>
       </ShellHero>
@@ -982,6 +993,7 @@ function MetricCard({
 
 function SettingsSidebar({
   activeAccountCount,
+  activeSignalsCount,
   briefHourLabel,
   profileReady,
   safariStatusLabel,
@@ -990,6 +1002,7 @@ function SettingsSidebar({
   activeSection,
 }: {
   activeAccountCount: number;
+  activeSignalsCount: number;
   briefHourLabel: string;
   profileReady: boolean;
   safariStatusLabel: string;
@@ -1028,9 +1041,12 @@ function SettingsSidebar({
         </div>
 
         {/* Stat tiles */}
-        <div className="grid grid-cols-2 gap-3">
-          <MetricCard label="Accounts" value={activeAccountCount} detail="linked" />
-          <MetricCard label="Topics" value={topicCount} detail="active" />
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard label="Accounts" value={activeAccountCount} detail="linked" />
+            <MetricCard label="Topics" value={topicCount} detail="active" />
+          </div>
+          <MetricCard label="Signals" value={activeSignalsCount} detail="active now" />
         </div>
 
         {/* Nav */}
