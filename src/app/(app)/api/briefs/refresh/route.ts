@@ -5,6 +5,7 @@ import { applyRateLimit } from "@/middleware/rate-limit";
 import type { NextRequest } from "next/server";
 import { db } from "@/server/db/client";
 import { logError } from "@/server/error-logger";
+import { getUserBriefDateRangeFromTz } from "@/lib/brief-date";
 
 /**
  * POST /api/briefs/refresh
@@ -33,16 +34,12 @@ export async function POST(request: NextRequest) {
   if (rl) return rl;
 
   try {
-    // Delete any existing brief for today (in UTC for simplicity)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Delete any existing brief for today (user-local date)
+    const today = getUserBriefDateRangeFromTz(dbUser.timezone);
     await db.daily_briefs.deleteMany({
       where: {
         user_id: dbUser.id,
-        brief_date: {
-          gte: today,
-          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
-        },
+        brief_date: today,
       },
     });
 

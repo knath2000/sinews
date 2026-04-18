@@ -3,6 +3,7 @@ import { db } from "@/server/db/client";
 export interface AuthUser {
   id: string;
   email: string;
+  timezone: string;
   isAdmin: boolean;
   profile: {
     displayName: string | null;
@@ -45,6 +46,7 @@ export async function ensureUser(supabaseUserId: string, email: string): Promise
   return {
     id: user.id,
     email: user.email,
+    timezone: user.timezone,
     isAdmin: user.user_profiles?.is_admin ?? false,
     profile: user.user_profiles
       ? {

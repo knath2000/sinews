@@ -13,6 +13,7 @@ import { sanitizeFeedSnippet, sanitizeFeedTitle } from "./text-utils";
 import { buildBriefItemProvenance } from "@/lib/safari-insights";
 import { updateBriefProgress as updateBriefProgressDb } from "@/lib/brief-progress-db";
 import { PHASE_MESSAGES } from "@/lib/brief-progress";
+import { getTodayBriefDate, getYesterdayBriefDate, getYesterdayBriefDateForUser, getTodayBriefDateForUser } from "@/lib/brief-date";
 
 // Re-export for backwards compat through feed-loader re-exports.
 const updateBriefProgress = updateBriefProgressDb;
@@ -176,9 +177,7 @@ export async function buildUserProfile(userId: string): Promise<{
  * Used for novelty bonus calculation.
  */
 export async function getYesterdayBriefTopics(userId: string): Promise<Set<string>> {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setHours(0, 0, 0, 0);
+  const yesterday = await getYesterdayBriefDateForUser(userId);
 
   const brief = await db.daily_briefs.findFirst({
     where: {

@@ -4,6 +4,7 @@ import { db } from "@/server/db/client";
 import type { NextRequest } from "next/server";
 import { applyRateLimit } from "@/middleware/rate-limit";
 import { logError } from "@/server/error-logger";
+import { getUserBriefDateRangeFromTz } from "@/lib/brief-date";
 import {
   sanitizeFeedSnippet,
   sanitizeFeedText,
@@ -35,9 +36,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get today's date at the start of day in UTC
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    // Get today's date in the user's timezone
+    const today = getUserBriefDateRangeFromTz(dbUser.timezone);
 
     // Check if a brief exists for today
     const existingBrief = await db.daily_briefs.findFirst({
