@@ -562,14 +562,17 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
     model: SUMMARY_MODEL,
     messages: [{ role: "user", content: prompt }],
     temperature: 0.5,
-    max_tokens: 250,
-    response_format: { type: "json_object" },
+    max_tokens: 300,
+    // Open-source models (OpenRouter) do not support json_object format
   });
 
-  const content = response.choices[0]?.message.content;
+  let content = response.choices[0]?.message.content;
   if (!content) {
     throw new Error("OpenAI summary generation returned empty response");
   }
+
+  // Strip markdown code blocks that open-source models wrap their JSON in
+  content = content.replace(/```json/gi, "").replace(/```/g, "").trim();
 
   const parsed = JSON.parse(content) as Partial<GeneratedBriefItem>;
 
