@@ -7,7 +7,19 @@ let client: OpenAI | null = null;
 
 function getClient(): OpenAI {
   if (!client) {
-    client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+    const isRouter = !!process.env.OPENROUTER_API_KEY;
+
+    client = new OpenAI({
+      ...(isRouter ? {
+        baseURL: "https://openrouter.ai/api/v1",
+        defaultHeaders: {
+          "HTTP-Referer": "https://sinews.vercel.app",
+          "X-Title": "AI News Brief",
+        },
+      } : {}),
+      apiKey: apiKey,
+    });
   }
   return client;
 }
