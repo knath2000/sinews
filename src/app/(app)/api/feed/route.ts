@@ -103,6 +103,39 @@ export async function GET(request: NextRequest) {
       : null;
 
     if (!inProgressBrief) {
+      // Rate-limit the generation trigger
+      const rl = await applyRateLimit(request, "feed-generate", {
+        limit: 5,
+        windowMs: 60_000,
+        identifyBy: "user",
+      });
+      if (rl) return rl;
+
+      // Upsert a pending row so subsequent polls see a real record
+      await db.daily_briefs.upsert({
+        where: {
+          user_id_brief_date: {
+            user_id: dbUser.id,
+            brief_date: getUserBriefDateRangeFromTz(dbUser.timezone).gte,
+          },
+        },
+        create: {
+          user_id: dbUser.id,
+          brief_date: getUserBriefDateRangeFromTz(dbUser.timezone).gte,
+          status: "pending",
+          progress_json: JSON.stringify({
+            phase: "starting",
+            message: PHASE_MESSAGES.starting,
+            step: 1,
+            totalSteps: 6,
+            itemsCompleted: 0,
+            itemsTotal: 0,
+            updatedAt: new Date().toISOString(),
+          }),
+        },
+        update: {},
+      });
+
       // Trigger durable generation via Inngest
       try {
         await inngest.send({

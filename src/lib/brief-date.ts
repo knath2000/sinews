@@ -22,28 +22,17 @@ export function getTodayBriefDate(timeZone: string): Date {
 
 /**
  * Compute yesterday's brief date for novelty scoring.
- * Uses Intl.DateTimeFormat to derive date parts in the target timezone,
- * then constructs yesterday's date from those parts — DST-safe.
+ * Subtracts 24h from the user's local *start of day* (which is already UTC
+ * midnight of that date), then re-reads the resulting UTC instant in the user's
+ * timezone.  Because we subtract exactly one day from a midnight anchor, this
+ * yields the correct calendar day in all DST / host-timezone combinations.
  */
 export function getYesterdayBriefDate(timeZone: string): Date {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(new Date());
-  const get = (type: string) => {
-    const p = parts.find((p) => p.type === type);
-    return p ? parseInt(p.value, 10) : 0;
-  };
-  const y = get("year");
-  const m = get("month") - 1;
-  const d = get("day");
-  // Subtract one day using calendar arithmetic in the user's timezone
-  const localDate = new Date(y, m, d - 1);
-  const localDateStr = localDate.toLocaleDateString("en-CA", { timeZone });
-  return new Date(localDateStr);
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone });
+  const todayUTC = new Date(todayStr); // YYYY-MM-DDT00:00:00Z — no host-TZ ambiguity
+  const yesterdayUTC = new Date(todayUTC.getTime() - 24 * 60 * 60 * 1000);
+  const yesterdayStr = yesterdayUTC.toLocaleDateString("en-CA", { timeZone });
+  return new Date(yesterdayStr);
 }
 
 /**
