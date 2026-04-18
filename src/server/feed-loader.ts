@@ -407,8 +407,8 @@ export async function findReplacementArticle(
     }
   }
 
-  // Fetch candidate pool
-  const since = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+  // Fetch candidate pool from the last 24 hours
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   let candidates = await getCandidates(since, 50);
   if (candidates.length === 0) return null;
 

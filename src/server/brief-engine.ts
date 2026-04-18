@@ -668,8 +668,8 @@ export async function generateDailyBriefForUser(
     // Fetch yesterday's brief topics for novelty bonus
     const yesterdayBriefTopics = await getYesterdayBriefTopics(userId);
 
-    // Get candidates from last 48 hours
-    const since = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    // Get candidates from last 24 hours
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     let candidates = await getCandidates(since, 50);
 
     // No annotated articles available — run a mini ingestion + annotation pipeline

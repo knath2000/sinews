@@ -5,10 +5,24 @@ const db = new PrismaClient();
 
 async function cleanup() {
   console.log("Running cleanup...");
-  
-  // Delete brief items first (FK dependency)
-  await db.daily_brief_items.deleteMany({});
-  console.log("  Cleaned up brief items");
+
+  // Delete feedback events first (FK → daily_brief_items)
+  try {
+    const fb = await db.feedback_events.deleteMany({});
+    console.log(`  Cleaned up feedback events (${fb.count})`);
+  } catch (err) {
+    console.error("  Failed on feedback_events:", err);
+    throw err;
+  }
+
+  // Delete brief items next
+  try {
+    const bi = await db.daily_brief_items.deleteMany({});
+    console.log(`  Cleaned up brief items (${bi.count})`);
+  } catch (err) {
+    console.error("  Failed on daily_brief_items:", err);
+    throw err;
+  }
   
   // Delete briefs
   await db.daily_briefs.deleteMany({});
@@ -28,10 +42,27 @@ async function cleanup() {
   });
   
   for (const user of testUsers) {
+    await db.interest_signals.deleteMany({
+      where: { user_id: user.id },
+    });
+    await db.linked_accounts.deleteMany({
+      where: { user_id: user.id },
+    });
     await db.user_topic_preferences.deleteMany({
       where: { user_id: user.id },
     });
     await db.user_profiles.deleteMany({
+      where: { user_id: user.id },
+    });
+    await db.feedback_events.deleteMany({
+      where: { user_id: user.id },
+    });
+    await db.daily_brief_items.deleteMany({
+      where: {
+        daily_brief: { user_id: user.id },
+      },
+    });
+    await db.daily_briefs.deleteMany({
       where: { user_id: user.id },
     });
   }
