@@ -900,9 +900,10 @@ export default function FeedPage() {
 
         console.log(`[FEED_POLL] Response Status: ${res.status}`);
 
-        if (res.ok) {
+        // res.ok is true for ALL 2xx (including 202), so we must explicitly check 200
+        if (res.status === 200) {
           const data = await res.json();
-          console.log("[FEED_POLL] 200 OK - Brief Data Received:", data);
+          console.log("[FEED_POLL] 200 OK - Articles Received:", data);
           const normalized = normalizeFeedPayload(data);
           if (normalized && mounted) {
             setArticles(normalized.articles);
