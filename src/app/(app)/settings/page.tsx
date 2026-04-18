@@ -23,6 +23,7 @@ import { hasSupabaseRuntimeConfig, SUPABASE_CONFIG_ERROR } from "@/lib/supabase/
 import { PageShell, ShellCard, ShellHero, ShellSoftCard } from "@/components/page-shell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { humanizeSafariTopic, type SafariImportSummary } from "@/lib/safari-insights";
+import { clearCachedBrief } from "@/app/(app)/feed/feed-cache";
 
 const sidebarLinks = [
   { href: "/feed", label: "Feed" },
@@ -393,6 +394,7 @@ export default function SettingsPage({
   const displayName = profileDisplayName.trim() || "there";
 
   async function handleSignOut() {
+    clearCachedBrief();
     if (!supabaseConfigured) {
       window.location.href = "/login";
       return;

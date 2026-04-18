@@ -39,3 +39,11 @@ export function setCachedBrief(payload: FeedPayload): void {
     // Storage blocked or full — silent
   }
 }
+
+export function clearCachedBrief(): void {
+  try {
+    sessionStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Storage blocked — silent
+  }
+}
