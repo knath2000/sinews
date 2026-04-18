@@ -213,11 +213,19 @@ export default function AdminPage() {
   // Poll ref for recursive setTimeout cleanup
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Unannotated articles count
+  const [unannotatedCount, setUnannotatedCount] = useState<number>(0);
+
   const loadMetrics = useCallback(async () => {
     try {
       const data = await fetchJson<MetricsData>("/api/admin/metrics");
       setMetrics(data);
       setError(null);
+
+      const countData = await fetchJson<{ unannotatedCount: number }>(
+        "/api/admin/resync-annotations",
+      );
+      setUnannotatedCount(countData.unannotatedCount);
     } catch (e) {
       console.error("[AI-NEWS ERROR] admin-metrics-load:", e);
       setError(e instanceof Error ? e.message : "Failed to load metrics");
@@ -784,12 +792,51 @@ export default function AdminPage() {
                   </h2>
                 </div>
                 <div className="mt-5 space-y-4">
-                  <button
-                    onClick={handleRunIngest}
-                    className="inline-flex items-center justify-center rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-[0_12px_30px_-16px_rgba(15,23,42,0.8)] transition hover:-translate-y-0.5 hover:bg-zinc-800"
-                  >
-                    Run ingest
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleRunIngest}
+                      className="inline-flex items-center justify-center rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-[0_12px_30px_-16px_rgba(15,23,42,0.8)] transition hover:-translate-y-0.5 hover:bg-zinc-800"
+                    >
+                      Run ingest
+                    </button>
+
+                    <div className="flex items-center gap-3 border-l border-white/40 pl-4">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetchJson<{
+                              message: string;
+                              status: string;
+                            }>(
+                              "/api/admin/resync-annotations",
+                              { method: "POST" },
+                            );
+                            if (res.status === "complete") {
+                              flashMessage("Up to date: " + res.message);
+                            } else {
+                              flashMessage("Processing: " + res.message);
+                            }
+                            await loadMetrics();
+                          } catch (e) {
+                            flashError("Failed to start resync");
+                          }
+                        }}
+                        className="inline-flex items-center justify-center rounded-full border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-700 transition hover:-translate-y-0.5 hover:bg-sky-100"
+                      >
+                        Resync Annotations
+                      </button>
+                      {unannotatedCount > 0 ? (
+                        <span className="text-sm font-mono font-semibold text-rose-600 animate-pulse">
+                          {unannotatedCount} pending
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-sm text-emerald-600">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          Zero backlog
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="space-y-2">
                     <label className="text-xs uppercase tracking-[0.3em] text-zinc-400">

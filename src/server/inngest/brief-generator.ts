@@ -13,7 +13,10 @@ export const batchAnnotateArticles = inngest.createFunction(
     id: "batch-annotate-articles",
     name: "Batch Annotate Unannotated Articles",
     retries: 1,
-    triggers: [{ event: "article.ingestion-complete" }],
+    triggers: [
+      { event: "article.ingestion-complete" },
+      { event: "admin.resync.annotations" }, // Manual admin trigger
+    ],
   },
   async ({ step }) => {
     const count = await step.run("classify-batch", async () => {
