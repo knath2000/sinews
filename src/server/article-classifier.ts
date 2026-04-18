@@ -168,6 +168,9 @@ export async function classifyUnannotatedArticles(): Promise<number> {
       snippet: true,
     },
     take: 10,
+    orderBy: {
+      created_at: "desc",
+    },
   });
 
   console.log(`[BATCH] Query returned ${articlesWithoutAnnotations.length} articles.`);
