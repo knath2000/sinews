@@ -112,6 +112,7 @@ model articles {
 
   article_annotations article_annotations?
   daily_brief_items   daily_brief_items[]
+  feedback_events     feedback_events[]
 
   @@map("articles")
 }
@@ -176,6 +177,7 @@ model feedback_events {
 
   user             users             @relation(fields: [user_id], references: [id])
   daily_brief_item daily_brief_items @relation(fields: [daily_brief_item_id], references: [id])
+  article          articles?         @relation(fields: [article_id], references: [id])
 
   @@map("feedback_events")
 }

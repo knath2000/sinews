@@ -61,6 +61,20 @@ export default function SettingsPage({
   const [showAllTopics, setShowAllTopics] = useState(false);
   const [activeSection, setActiveSection] = useState("#your-profile");
 
+  // Feedback history
+  interface FeedbackItem {
+    id: number;
+    event_type: "thumbs_up" | "thumbs_down";
+    created_at: string;
+    article: {
+      title: string;
+      published_at: string | null;
+      canonical_url: string;
+      source_name: string;
+    } | null;
+  }
+  const [feedbackHistory, setFeedbackHistory] = useState<FeedbackItem[]>([]);
+
   // --- Safari History Import state ---
   const [safariImport, setSafariImport] = useState<{
     id: string;
@@ -154,6 +168,14 @@ export default function SettingsPage({
           setProfileDisplayName(data.displayName ?? "");
           setProfileTimezone(data.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
         }
+      })
+      .catch(() => {});
+
+    // Fetch feedback history
+    fetch("/api/settings/feedback")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.feedback) setFeedbackHistory(data.feedback);
       })
       .catch(() => {});
   }, [loadSafariImport]);
@@ -354,6 +376,7 @@ export default function SettingsPage({
     { href: "#linked-accounts", label: "Accounts" },
     { href: "#brief-delivery-time", label: "Brief time" },
     { href: "#topic-preferences", label: "Topics" },
+    { href: "#feedback-history", label: "Feedback History" },
     { href: "#privacy", label: "Privacy" },
     { href: "#danger-zone", label: "Danger zone" },
   ];
@@ -745,6 +768,94 @@ export default function SettingsPage({
             >
               Show all {TOPIC_TAXONOMY.length} topics
             </button>
+          )}
+        </ShellCard>
+      </section>
+
+      {/* ── Feedback History ────────────────────────────── */}
+      <section id="feedback-history" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
+              Feedback History
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
+              Review the articles you&apos;ve rated. This feedback directly shapes your future personalization signals.
+            </p>
+          </div>
+
+          {feedbackHistory.length === 0 ? (
+            <p className="text-sm italic" style={{ color: "var(--ds-text-dim)" }}>
+              No feedback given yet. Rate articles in your feed to see them here.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--ds-border)" }}>
+                    <th className="pb-2 font-medium w-28" style={{ color: "var(--ds-text-muted)" }}>
+                      Rating
+                    </th>
+                    <th className="pb-2 font-medium" style={{ color: "var(--ds-text-muted)" }}>
+                      Article
+                    </th>
+                    <th className="pb-2 font-medium whitespace-nowrap" style={{ color: "var(--ds-text-muted)" }}>
+                      Published
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feedbackHistory.map((item) => (
+                    <tr key={item.id} style={{ borderBottom: "1px solid var(--ds-border)" }}>
+                      <td className="py-3 pr-4 align-top">
+                        {item.event_type === "thumbs_up" ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: "#10b981" }}>
+                            Liked
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: "#ef4444" }}>
+                            Disliked
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        {item.article ? (
+                          <>
+                            <a
+                              href={item.article.canonical_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium hover:underline"
+                              style={{ color: "var(--ds-text)" }}
+                            >
+                              {item.article.title}
+                            </a>
+                            {item.article.source_name && (
+                              <div className="text-xs mt-1" style={{ color: "var(--ds-text-dim)" }}>
+                                {item.article.source_name}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{ color: "var(--ds-text-dim)" }}>
+                            Article unavailable
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 align-top text-xs whitespace-nowrap" style={{ color: "var(--ds-text-dim)" }}>
+                        {item.article?.published_at
+                          ? new Date(item.article.published_at).toLocaleDateString(undefined, {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : "Unknown"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </ShellCard>
       </section>
