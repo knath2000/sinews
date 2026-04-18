@@ -3,6 +3,8 @@ import { loadTodaysBrief } from "@/server/feed-loader";
 import { requireAuth } from "@/lib/auth-server";
 import { applyRateLimit } from "@/middleware/rate-limit";
 import { PHASE_MESSAGES, type BriefProgress } from "@/lib/brief-progress";
+
+export const dynamic = "force-dynamic";
 import { logError } from "@/server/error-logger";
 import { inngest } from "@/server/inngest/client";
 import { getUserBriefDateRangeFromTz } from "@/lib/brief-date";

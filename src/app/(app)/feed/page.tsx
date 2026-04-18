@@ -864,7 +864,13 @@ export default function FeedPage() {
 
     async function fetchBrief(): Promise<{ ok: boolean }> {
       try {
-        const res = await fetch("/api/feed");
+        const res = await fetch(`/api/feed?_t=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+          },
+        });
         if (res.ok) {
           const data = await res.json();
           const normalized = normalizeFeedPayload(data);
@@ -970,7 +976,13 @@ export default function FeedPage() {
   const handleRefresh = useCallback(() => {
     setProgressState(null);
     setFeedError(false);
-    fetch("/api/feed")
+    fetch(`/api/feed?_t=${Date.now()}`, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+      },
+    })
       .then((res) => {
         if (res.ok) return res.json().then((data) => {
           const normalized = normalizeFeedPayload(data);
