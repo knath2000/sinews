@@ -49,31 +49,48 @@ export async function GET(request: NextRequest) {
       },
       status: { in: ["pending", "generating", "failed"] },
     },
-    select: { status: true, progress_json: true },
+    select: { id: true, status: true, progress_json: true },
   });
 
-  // -- FAILED brief --
+  // -- FAILED brief — re-trigger generation --
   if (inProgressBrief?.status === "failed") {
-    const progress = inProgressBrief.progress_json
-      ? (JSON.parse(inProgressBrief.progress_json) as BriefProgress)
-      : {
-          phase: "failed",
-          message: PHASE_MESSAGES.failed,
-          step: 0,
+    // Reset the failed brief so generation can run again.
+    await db.daily_briefs.update({
+      where: { id: inProgressBrief.id },
+      data: {
+        status: "pending",
+        progress_json: JSON.stringify({
+          phase: "starting",
+          message: PHASE_MESSAGES.starting,
+          step: 1,
           totalSteps: 6,
           itemsCompleted: 0,
           itemsTotal: 0,
           updatedAt: new Date().toISOString(),
-        };
+        }),
+      },
+    });
+
+    generateDailyBriefForUser(dbUser.id).catch((err) => {
+      logError("brief-retry-after-failure", err, { userId: dbUser.id });
+    });
 
     return NextResponse.json(
       {
-        generating: false,
-        status: "failed" as const,
-        progress,
-        pollAfterMs: 30_000,
+        generating: true,
+        status: "pending" as const,
+        progress: {
+          phase: "starting",
+          message: PHASE_MESSAGES.starting,
+          step: 1,
+          totalSteps: 6,
+          itemsCompleted: 0,
+          itemsTotal: 0,
+          updatedAt: new Date().toISOString(),
+        },
+        pollAfterMs: 3000,
       },
-      { status: 503 }
+      { status: 202 }
     );
   }
 

@@ -812,6 +812,7 @@ export default function FeedPage() {
             setGeneratedAt(normalized.generatedAt);
             setCachedBrief(normalized);
             setProgressState(null);
+            setLoading(false);
           }
           return { ok: !!normalized };
         }
@@ -819,9 +820,8 @@ export default function FeedPage() {
         if (res.status === 202) {
           const data = await res.json() as BriefProgressState;
           if (mounted) {
-            setArticles(null);
-            setGeneratedAt(null);
             setProgressState(data);
+            // Keep any existing cached articles on screen during regeneration.
           }
           return { ok: false };
         }
@@ -882,7 +882,7 @@ export default function FeedPage() {
       // Step 3: Fetch (and keep polling if not ready)
       const { ok } = await fetchBrief();
       if (!ok && mounted) {
-        setLoading(false);
+        if (!cached) setLoading(false); // already cleared if cached existed
         const delayMs = (Date.now() - pollStart) >= 60_000 ? 8000 : 3000;
         schedulePoll(delayMs, pollStart);
       }
@@ -894,6 +894,28 @@ export default function FeedPage() {
       mounted = false;
       if (timer) clearTimeout(timer);
     };
+  }, []);
+
+  // Refresh trigger — re-fetches /api/feed and updates progress + articles.
+  const handleRefresh = useCallback(() => {
+    setProgressState(null);
+    fetch("/api/feed")
+      .then((res) => {
+        if (res.ok) return res.json().then((data) => {
+          const normalized = normalizeFeedPayload(data);
+          if (normalized) {
+            setArticles(normalized.articles);
+            setGeneratedAt(normalized.generatedAt);
+            setCachedBrief(normalized);
+            setProgressState(null);
+            setLoading(false);
+          }
+        });
+        if (res.status === 202) return res.json().then((data: BriefProgressState) => {
+          setProgressState(data);
+        });
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1104,7 +1126,7 @@ export default function FeedPage() {
         progressState ? (
           <BriefProgressCard
             progress={progressState.progress}
-            onRefresh={() => setProgressState({ ...progressState })}
+            onRefresh={handleRefresh}
           />
         ) : (
           <BriefProgressCard
@@ -1117,7 +1139,7 @@ export default function FeedPage() {
               itemsTotal: 0,
               updatedAt: new Date().toISOString(),
             }}
-            onRefresh={() => window.location.reload()}
+            onRefresh={handleRefresh}
           />
         )
       ) : hasArticles ? (
@@ -1141,7 +1163,7 @@ export default function FeedPage() {
             itemsTotal: 0,
             updatedAt: new Date().toISOString(),
           }}
-          onRefresh={() => window.location.reload()}
+          onRefresh={handleRefresh}
         />
       )}
     </PageShell>
