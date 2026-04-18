@@ -20,14 +20,6 @@ export async function GET(request: NextRequest) {
     if ("status" in auth) return auth;
     const { dbUser } = auth;
 
-    // Rate-limit brief generation trigger
-    const rl = await applyRateLimit(request, "feed-generate", {
-      limit: 5,
-      windowMs: 60_000,
-      identifyBy: "user",
-    });
-    if (rl) return rl;
-
     const brief = await loadTodaysBrief(dbUser.id);
 
     if (brief) {
@@ -52,6 +44,13 @@ export async function GET(request: NextRequest) {
 
     // -- FAILED brief — re-trigger generation --
     if (inProgressBrief?.status === "failed") {
+      const rl = await applyRateLimit(request, "feed-generate", {
+        limit: 5,
+        windowMs: 60_000,
+        identifyBy: "user",
+      });
+      if (rl) return rl;
+
       // Reset the failed brief so generation can run again.
       await db.daily_briefs.update({
         where: { id: inProgressBrief.id },

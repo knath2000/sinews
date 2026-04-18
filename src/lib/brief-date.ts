@@ -22,12 +22,27 @@ export function getTodayBriefDate(timeZone: string): Date {
 
 /**
  * Compute yesterday's brief date for novelty scoring.
- * Uses timezone-aware computation to handle DST transitions correctly.
+ * Uses Intl.DateTimeFormat to derive date parts in the target timezone,
+ * then constructs yesterday's date from those parts — DST-safe.
  */
 export function getYesterdayBriefDate(timeZone: string): Date {
-  const now = new Date();
-  const yesterdayTs = now.getTime() - 24 * 60 * 60 * 1000;
-  const localDateStr = new Date(yesterdayTs).toLocaleDateString("en-CA", { timeZone });
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(new Date());
+  const get = (type: string) => {
+    const p = parts.find((p) => p.type === type);
+    return p ? parseInt(p.value, 10) : 0;
+  };
+  const y = get("year");
+  const m = get("month") - 1;
+  const d = get("day");
+  // Subtract one day using calendar arithmetic in the user's timezone
+  const localDate = new Date(y, m, d - 1);
+  const localDateStr = localDate.toLocaleDateString("en-CA", { timeZone });
   return new Date(localDateStr);
 }
 
