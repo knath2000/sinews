@@ -1,156 +1,154 @@
 @import "tailwindcss";
 
+/* ============================================
+   Design System Tokens — Editorial / Stitch-aligned
+   Dual-mode: each mode is separately authored.
+   ============================================ */
+
 :root {
-  --background: #f6f1e8;
-  --foreground: #18130f;
-  --text-muted: #111111;
-  --text-subtle: #111111;
+  /* ── Light mode — markup-paper ── */
+  --ds-bg: #f7f0df;
+  --ds-surface-1: #fffdfa;
+  --ds-surface-2: #f2e8d3;
+  --ds-border: #111111;
+  --ds-text: #111111;
+  --ds-text-muted: #4b443a;
+  --ds-text-dim: #71695e;
+  --ds-accent: #111111;
+  --ds-accent-soft: rgba(17, 17, 17, 0.05);
+  --ds-accent-glow: none;
+
+  /* Legacy aliases (keep old consumers working during transition) */
+  --background: #f7f0df;
+  --foreground: #111111;
+  --text-muted: #4b443a;
+  --text-subtle: #4b443a;
   --text-panel-label: #111111;
   --text-accent-panel: #111111;
+  --glass-soft-bg: var(--ds-surface-1);
+  --glass-soft-border: var(--ds-border);
+  --glass-soft-blur: 0px;
+  --glass-panel-bg: var(--ds-surface-1);
+  --glass-panel-border: var(--ds-border);
+  --glass-panel-blur: 0px;
+  --glass-hero-bg: var(--ds-surface-1);
+  --glass-hero-border: var(--ds-border);
+  --glass-hero-blur: 0px;
+  --surface-card-bg: var(--ds-surface-1);
+  --surface-card-bg-strong: var(--ds-surface-2);
+  --surface-card-border: var(--ds-border);
+  --surface-badge-bg: var(--ds-surface-2);
+  --surface-badge-border: var(--ds-border);
+  --surface-border-white: var(--ds-border);
+  --surface-border-subtle: var(--ds-border);
+  --surface-dark-badge: var(--ds-surface-2);
+  --surface-soft-panel: var(--ds-surface-2);
+  --surface-status-bg: var(--ds-surface-1);
+  --surface-status-border: var(--ds-border);
+  --surface-status-dashed: var(--ds-border);
+  --surface-sky-tint: rgba(17, 17, 17, 0.06);
+  --surface-sky-border-subtle: var(--ds-border);
+  --surface-sky-border-strong: var(--ds-border);
+  --surface-apricot-border: var(--ds-border);
+  --surface-sky-icon-bg: var(--ds-surface-2);
+  --surface-warm-panel-border: var(--ds-border);
+  --bg-apricot-orange: none;
+  --bg-sky-lime: none;
+  --ambient-apricot: transparent;
+  --ambient-apricot-fade: transparent;
+  --ambient-sky: transparent;
+  --ambient-sky-fade: transparent;
+  --ambient-lime: transparent;
+  --ambient-top-wash: transparent;
+  --tint-sky-1: transparent;
+  --tint-sky-2: transparent;
+  --tint-apricot-1: transparent;
+  --tint-apricot-2: transparent;
+  --tint-lime-1: transparent;
+  --tint-lime-2: transparent;
+  --tint-berry-1: transparent;
+  --tint-berry-2: transparent;
+  --ae-sky: 17, 17, 17;
+  --ae-sky-text: 17, 17, 17;
+  --ae-apricot: 17, 17, 17;
+  --ae-apricot-text: 17, 17, 17;
+  --ae-violet: 17, 17, 17;
+  --ae-violet-text: 17, 17, 17;
+  --ae-rose: 17, 17, 17;
+  --ae-rose-text: 17, 17, 17;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-
-  /* Accent palette */
-  --color-accent-sky: #38bdf8;
-  --color-accent-apricot: #fb923c;
-  --color-accent-lime: #a3e635;
-  --color-accent-berry: #f472b6;
-
-  /* Accent edge RGB values */
-  --ae-sky: 2, 132, 199;
-  --ae-sky-text: 37, 158, 228;
-  --ae-apricot: 234, 88, 12;
-  --ae-apricot-text: 251, 146, 60;
-  --ae-violet: 147, 51, 234;
-  --ae-violet-text: 168, 85, 247;
-  --ae-rose: 219, 39, 119;
-  --ae-rose-text: 244, 114, 182;
-
-  /* Light mode: glass surfaces with white base */
-  --glass-soft-bg: color-mix(in srgb, white 93%, transparent);
-  --glass-soft-border: color-mix(in srgb, #e3d5c8 88%, rgba(56, 189, 248, 0.05));
-  --glass-soft-blur: 18px;
-  --glass-panel-bg: color-mix(in srgb, white 97%, transparent);
-  --glass-panel-border: color-mix(in srgb, #e2d5c7 90%, rgba(56, 189, 248, 0.08));
-  --glass-panel-blur: 16px;
-  --glass-hero-bg: color-mix(in srgb, white 98%, transparent);
-  --glass-hero-border: color-mix(in srgb, #e0d2c3 90%, rgba(56, 189, 248, 0.10));
-  --glass-hero-blur: 18px;
-
-  /* Inline style surface variables — light mode */
-  --surface-card-bg: rgba(255, 255, 255, 0.97);
-  --surface-card-bg-strong: rgba(255, 255, 255, 0.99);
-  --surface-card-border: rgba(255, 255, 255, 0.92);
-  --surface-badge-bg: rgba(255, 255, 255, 0.94);
-  --surface-badge-border: rgba(232, 223, 212, 0.92);
-  --surface-soft-panel: rgba(244, 236, 226, 0.9);
-  --surface-border-white: rgba(214, 200, 186, 0.96);
-  --surface-border-subtle: rgba(196, 181, 167, 0.82);
-  --surface-dark-badge: rgba(15, 23, 42, 0.62);
-  --surface-warm-panel-border: rgba(251, 146, 60, 0.14);
-  --surface-sky-icon-bg: rgba(56, 189, 248, 0.10);
-  --surface-status-bg: rgba(255, 255, 255, 0.88);
-  --surface-status-border: rgba(217, 204, 190, 0.94);
-  --surface-status-dashed: rgba(196, 181, 167, 0.68);
-  --surface-sky-tint: rgba(56, 189, 248, 0.08);
-  --surface-sky-border-subtle: rgba(56, 189, 248, 0.15);
-  --surface-sky-border-strong: rgba(56, 189, 248, 0.16);
-  --surface-apricot-border: rgba(251, 146, 60, 0.18);
-
-  /* Gradient surfaces */
-  --bg-apricot-orange: linear-gradient(145deg, rgba(251, 146, 60, 0.12), rgba(244, 114, 182, 0.06));
-  --bg-sky-lime: linear-gradient(145deg, rgba(56, 189, 248, 0.10), rgba(163, 230, 53, 0.06));
-
-  /* Ambient gradients — light mode */
-  --ambient-apricot: rgba(251, 146, 60, 0.07);
-  --ambient-apricot-fade: rgba(244, 114, 182, 0.03);
-  --ambient-sky: rgba(56, 189, 248, 0.05);
-  --ambient-sky-fade: rgba(96, 165, 250, 0.03);
-  --ambient-lime: rgba(163, 230, 53, 0.03);
-  --ambient-top-wash: rgba(255, 255, 255, 0.60);
-
-  /* Tint pools — light mode */
-  --tint-sky-1: rgba(56, 189, 248, 0.06);
-  --tint-sky-2: rgba(56, 189, 248, 0.12);
-  --tint-apricot-1: rgba(251, 146, 60, 0.06);
-  --tint-apricot-2: rgba(251, 146, 60, 0.12);
-  --tint-lime-1: rgba(163, 230, 53, 0.06);
-  --tint-lime-2: rgba(163, 230, 53, 0.12);
-  --tint-berry-1: rgba(244, 114, 182, 0.06);
-  --tint-berry-2: rgba(244, 114, 182, 0.12);
-}
-
-/* ============================================
-   DARK MODE — clean dark, high contrast
-   ============================================ */
 html.dark {
-  --background: #0f0f0f;
-  --foreground: #e8e4df;
-  --text-muted: #b4ada5;
-  --text-subtle: #9b948b;
-  --text-panel-label: #d4cdc5;
-  --text-accent-panel: #c4e7ff;
+  /* ── Dark mode — noir editorial console ── */
+  --ds-bg: #0b0b0b;
+  --ds-surface-1: #141414;
+  --ds-surface-2: #1c1c1c;
+  --ds-border: #44445a;
+  --ds-text: #f4eee1;
+  --ds-text-muted: #c2b8a8;
+  --ds-text-dim: #93897b;
+  --ds-accent: #00f5e8;
+  --ds-accent-soft: rgba(0, 245, 232, 0.12);
+  --ds-accent-glow: 0 0 0 1px rgba(0, 245, 232, 0.92), 0 0 16px rgba(0, 245, 232, 0.28);
 
-  /* Accent RGB for inline styles */
-  --ae-sky-text: 56, 189, 248;
-  --ae-apricot-text: 251, 146, 60;
-  --ae-violet-text: 168, 85, 247;
-  --ae-rose-text: 244, 114, 182;
-
-  /* Glass surfaces — darker, more opaque */
-  --glass-soft-bg: color-mix(in srgb, #181614 88%, transparent);
-  --glass-soft-border: color-mix(in srgb, #242220 82%, rgba(56, 189, 248, 0.05));
-  --glass-panel-bg: color-mix(in srgb, #1e1c18 94%, transparent);
-  --glass-panel-border: color-mix(in srgb, #2a2824 84%, rgba(56, 189, 248, 0.06));
-  --glass-hero-bg: color-mix(in srgb, #242220 96%, transparent);
-  --glass-hero-border: color-mix(in srgb, #302e2a 86%, rgba(56, 189, 248, 0.08));
-
-  /* Inline style surfaces — dark mode (lighter bases, more opaque) */
-  --surface-card-bg: rgba(42, 40, 36, 0.90);
-  --surface-card-bg-strong: rgba(52, 50, 46, 0.97);
-  --surface-card-border: rgba(56, 54, 48, 0.60);
-  --surface-badge-bg: rgba(42, 40, 36, 0.88);
-  --surface-badge-border: rgba(60, 58, 52, 0.60);
-  --surface-soft-panel: rgba(38, 36, 32, 0.70);
-  --surface-border-white: rgba(76, 72, 66, 0.60);
-  --surface-border-subtle: rgba(60, 58, 52, 0.40);
-  --surface-dark-badge: rgba(240, 240, 240, 0.08);
-  --surface-warm-panel-border: rgba(251, 146, 60, 0.12);
-  --surface-sky-icon-bg: rgba(56, 189, 248, 0.08);
-  --surface-status-bg: rgba(34, 32, 28, 0.80);
-  --surface-status-border: rgba(56, 54, 48, 0.60);
-  --surface-status-dashed: rgba(56, 54, 48, 0.40);
-  --surface-sky-tint: rgba(56, 189, 248, 0.06);
-  --surface-sky-border-subtle: rgba(56, 189, 248, 0.12);
-  --surface-sky-border-strong: rgba(56, 189, 248, 0.16);
-  --surface-apricot-border: rgba(251, 146, 60, 0.16);
-
-  /* Gradient surfaces — dark */
-  --bg-apricot-orange: linear-gradient(145deg, rgba(251, 146, 60, 0.06), rgba(244, 114, 182, 0.03));
-  --bg-sky-lime: linear-gradient(145deg, rgba(56, 189, 248, 0.05), rgba(163, 230, 53, 0.02));
-
-  /* Ambient gradients — very subtle darkness */
-  --ambient-apricot: rgba(251, 146, 60, 0.03);
-  --ambient-apricot-fade: rgba(244, 114, 182, 0.02);
-  --ambient-sky: rgba(56, 189, 248, 0.02);
-  --ambient-sky-fade: rgba(96, 165, 250, 0.02);
-  --ambient-lime: rgba(163, 230, 53, 0.02);
-  --ambient-top-wash: rgba(255, 255, 255, 0.02);
-
-  /* Tint pools — dark */
-  --tint-sky-1: rgba(56, 189, 248, 0.04);
-  --tint-sky-2: rgba(56, 189, 248, 0.08);
-  --tint-apricot-1: rgba(251, 146, 60, 0.04);
-  --tint-apricot-2: rgba(251, 146, 60, 0.08);
-  --tint-lime-1: rgba(163, 230, 53, 0.04);
-  --tint-lime-2: rgba(163, 230, 53, 0.08);
-  --tint-berry-1: rgba(244, 114, 182, 0.04);
-  --tint-berry-2: rgba(244, 114, 182, 0.08);
+  /* Legacy aliases */
+  --background: #0b0b0b;
+  --foreground: #f4eee1;
+  --text-muted: #c2b8a8;
+  --text-subtle: #c2b8a8;
+  --text-panel-label: #c2b8a8;
+  --text-accent-panel: #00f5e8;
+  --glass-soft-bg: var(--ds-surface-1);
+  --glass-soft-border: var(--ds-border);
+  --glass-soft-blur: 0px;
+  --glass-panel-bg: var(--ds-surface-1);
+  --glass-panel-border: var(--ds-border);
+  --glass-panel-blur: 0px;
+  --glass-hero-bg: var(--ds-surface-1);
+  --glass-hero-border: var(--ds-border);
+  --glass-hero-blur: 0px;
+  --surface-card-bg: var(--ds-surface-1);
+  --surface-card-bg-strong: var(--ds-surface-2);
+  --surface-card-border: var(--ds-border);
+  --surface-badge-bg: var(--ds-surface-2);
+  --surface-badge-border: var(--ds-border);
+  --surface-border-white: var(--ds-border);
+  --surface-border-subtle: var(--ds-border);
+  --surface-dark-badge: var(--ds-surface-2);
+  --surface-soft-panel: var(--ds-surface-2);
+  --surface-status-bg: var(--ds-surface-1);
+  --surface-status-border: var(--ds-border);
+  --surface-status-dashed: var(--ds-border);
+  --surface-sky-tint: var(--ds-accent-soft);
+  --surface-sky-border-subtle: var(--ds-border);
+  --surface-sky-border-strong: var(--ds-accent);
+  --surface-apricot-border: var(--ds-border);
+  --surface-sky-icon-bg: var(--ds-accent-soft);
+  --surface-warm-panel-border: var(--ds-border);
+  --bg-apricot-orange: none;
+  --bg-sky-lime: none;
+  --ambient-apricot: transparent;
+  --ambient-apricot-fade: transparent;
+  --ambient-sky: transparent;
+  --ambient-sky-fade: transparent;
+  --ambient-lime: transparent;
+  --ambient-top-wash: transparent;
+  --tint-sky-1: transparent;
+  --tint-sky-2: transparent;
+  --tint-apricot-1: transparent;
+  --tint-apricot-2: transparent;
+  --tint-lime-1: transparent;
+  --tint-lime-2: transparent;
+  --tint-berry-1: transparent;
+  --tint-berry-2: transparent;
+  --ae-sky: 0, 245, 232;
+  --ae-sky-text: 0, 245, 232;
+  --ae-apricot: 0, 245, 232;
+  --ae-apricot-text: 0, 245, 232;
+  --ae-violet: 0, 245, 232;
+  --ae-violet-text: 0, 245, 232;
+  --ae-rose: 0, 245, 232;
+  --ae-rose-text: 0, 245, 232;
 
   color-scheme: dark;
 }
@@ -162,37 +160,53 @@ html {
 
 body {
   min-height: 100%;
-  background:
-    radial-gradient(ellipse 80% 60% at 5% 10%, var(--tint-apricot-1), transparent),
-    radial-gradient(ellipse 60% 80% at 90% 15%, var(--tint-sky-1), transparent),
-    radial-gradient(ellipse 50% 40% at 75% 85%, var(--tint-berry-1), transparent),
-    radial-gradient(ellipse 40% 50% at 25% 65%, var(--tint-lime-1), transparent),
-    linear-gradient(170deg, #f8f3eb 0%, #efe6d6 34%, #ebf1f8 68%, #f7f1e7 100%);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), "Geist", "SF Pro Text", sans-serif;
+  background: var(--ds-bg);
+  color: var(--ds-text);
+  font-family: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
   overflow-x: hidden;
   transition: background 200ms ease, color 150ms ease;
 }
 
+html.dark body {
+  background: var(--ds-bg);
+  color: var(--ds-text);
+}
+
+/* ── Typography helpers ─────────────────────────────────────── */
+
+.font-display {
+  font-family: var(--font-newsreader), "Newsreader", Georgia, serif;
+}
+
+.font-body {
+  font-family: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.font-mono-code {
+  font-family: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+}
+
 .text-muted {
-  color: var(--text-muted);
+  color: var(--ds-text-muted);
 }
 
 .text-subtle {
-  color: var(--text-subtle);
+  color: var(--ds-text-dim);
 }
 
 .text-panel-label {
-  color: var(--text-panel-label);
+  color: var(--ds-text-muted);
 }
 
 .text-accent-panel {
-  color: var(--text-accent-panel);
+  color: var(--ds-accent);
 }
 
 .text-strong {
-  color: var(--foreground);
+  color: var(--ds-text);
 }
+
+/* ── Line clamping ─────────────────────────────────────────── */
 
 .editorial-line-clamp-2,
 .editorial-line-clamp-3,
@@ -214,24 +228,123 @@ body {
   -webkit-line-clamp: 4;
 }
 
-html.dark body {
-  background:
-    radial-gradient(ellipse 80% 60% at 5% 10%, var(--tint-apricot-1), transparent),
-    radial-gradient(ellipse 60% 80% at 90% 15%, var(--tint-sky-1), transparent),
-    radial-gradient(ellipse 50% 40% at 75% 85%, var(--tint-berry-1), transparent),
-    radial-gradient(ellipse 40% 50% at 25% 65%, var(--tint-lime-1), transparent),
-    linear-gradient(170deg, #0f0f0f 0%, #0a0a0a 30%, #0c1014 65%, #12100e 100%);
-}
+/* ── Selection ─────────────────────────────────────────────── */
 
 ::selection {
-  background: rgba(56, 189, 248, 0.22);
+  background: rgba(17, 17, 17, 0.12);
 }
 
 html.dark ::selection {
-  background: rgba(56, 189, 248, 0.35);
+  background: rgba(0, 245, 232, 0.35);
 }
 
-/* ── Motion System ────────────────────────────────────────────────── */
+/* ── DS Form primitives ──────────────────────────────────────── */
+
+.ds-input,
+.ds-select {
+  border-radius: 10px;
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface-2);
+  color: var(--ds-text);
+  padding: 0.65rem 1rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.ds-input::placeholder {
+  color: var(--ds-text-dim);
+}
+.ds-input:focus,
+.ds-select:focus {
+  border-color: var(--ds-accent);
+}
+
+/* Dark mode: aqua glow on focus */
+html.dark .ds-input:focus,
+html.dark .ds-select:focus {
+  box-shadow: var(--ds-accent-glow);
+}
+
+/* Light mode: black outline on focus */
+html:not(.dark) .ds-input:focus,
+html:not(.dark) .ds-select:focus {
+  box-shadow: 0 0 0 1px var(--ds-border);
+}
+
+/* ── DS Buttons ──────────────────────────────────────────────── */
+
+.ds-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--ds-accent);
+  color: var(--ds-bg);
+  transition: opacity 150ms ease;
+}
+.ds-btn:hover {
+  opacity: 0.88;
+}
+.ds-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ds-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface-1);
+  color: var(--ds-text-muted);
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.ds-btn-secondary:hover {
+  border-color: var(--ds-accent);
+  background: var(--ds-surface-2);
+}
+
+/* ── DS Link Card ────────────────────────────────────────────── */
+
+.ds-link-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface-2);
+  padding: 0.45rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ds-text);
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.ds-link-card:hover {
+  border-color: var(--ds-accent);
+  background: var(--ds-accent-soft);
+}
+
+/* ── DS Topic Pill ──────────────────────────────────────────── */
+
+.ds-topic-pill {
+  border: 1px solid var(--ds-border);
+}
+
+/* ── DS Checkbox ───────────────────────────────────────────── */
+
+.ds-checkbox {
+  accent-color: var(--ds-accent);
+  accent-color: var(--ds-accent);
+}
+
+/* ── Motion — simplified (no ambient drift / shimmer) ──────── */
 
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(20px); }
@@ -243,54 +356,21 @@ html.dark ::selection {
   50% { transform: translate3d(0, -6px, 0); }
 }
 
-@keyframes ambient-drift {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  33% { transform: translate3d(4px, -8px, 0) scale(1.03); }
-  66% { transform: translate3d(-6px, 4px, 0) scale(0.97); }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-@keyframes glass-shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .motion-fade-up { animation: fade-up 700ms ease both; }
 .motion-float-soft { animation: float-soft 10s ease-in-out infinite; }
-.motion-ambient { animation: ambient-drift 18s ease-in-out infinite; }
 
-.shimmer-hover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg, transparent 35%,
-    rgba(255, 255, 255, 0.18) 48%,
-    rgba(255, 255, 255, 0.28) 50%,
-    rgba(255, 255, 255, 0.18) 52%,
-    transparent 65%
-  );
-  background-size: 200% 100%;
-  background-position: -200% center;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  border-radius: inherit;
-}
-
-.shimmer-hover:hover::after {
-  animation: glass-shimmer 1.2s ease forwards;
-  opacity: 1;
-}
-
-html.dark .shimmer-hover::after {
-  background: linear-gradient(
-    105deg, transparent 35%,
-    rgba(255, 255, 255, 0.04) 48%,
-    rgba(255, 255, 255, 0.06) 50%,
-    rgba(255, 255, 255, 0.04) 52%,
-    transparent 65%
-  );
-}
+.spin-slow { animation: spin 1s linear infinite; }
+.pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

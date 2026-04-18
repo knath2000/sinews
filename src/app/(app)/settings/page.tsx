@@ -27,8 +27,8 @@ import { humanizeSafariTopic, type SafariImportSummary } from "@/lib/safari-insi
 const sidebarLinks = [
   { href: "/feed", label: "Feed" },
   { href: "/settings", label: "Settings" },
-  { href: "/privacy", label: "Privacy" },
-  { href: "/terms", label: "Terms" },
+  { href: "/privacy", label: "Privacy Policy" },
+  { href: "/terms", label: "Terms of Service" },
 ];
 
 const supabaseConfigured = hasSupabaseRuntimeConfig();
@@ -53,13 +53,13 @@ export default function SettingsPage({
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccountInfo[]>([]);
   const [topics, setTopics] = useState<Set<string>>(new Set());
   const [savingTopic, setSavingTopic] = useState<string | null>(null);
-  // Profile editing state
   const [profileDisplayName, setProfileDisplayName] = useState("");
   const [profileTimezone, setProfileTimezone] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [briefHour, setBriefHour] = useState(4);
   const [showAllTopics, setShowAllTopics] = useState(false);
+  const [activeSection, setActiveSection] = useState("#your-profile");
 
   // --- Safari History Import state ---
   const [safariImport, setSafariImport] = useState<{
@@ -103,11 +103,10 @@ export default function SettingsPage({
         setSafariPreview(null);
       }
     } catch {
-      // Ignore load errors; the rest of the page still works.
+      // Ignore load errors
     }
   }, []);
 
-  // Resolve search params once on client
   useEffect(() => {
     if (searchParams) {
       searchParams.then((sp) => {
@@ -117,7 +116,6 @@ export default function SettingsPage({
     }
   }, [searchParams]);
 
-  // Load accounts + topics + brief hour + safari import on mount
   useEffect(() => {
     fetch("/api/settings/accounts")
       .then((r) => (r.ok ? r.json() : null))
@@ -160,7 +158,6 @@ export default function SettingsPage({
       .catch(() => {});
   }, [loadSafariImport]);
 
-  // Topic toggle handler
   async function toggleTopic(topic: string, checked: boolean) {
     setSavingTopic(topic);
     try {
@@ -181,13 +178,12 @@ export default function SettingsPage({
         });
       }
     } catch {
-      // Silently fail – user can retry
+      // Silently fail
     } finally {
       setSavingTopic(null);
     }
   }
 
-  // Profile edit handler
   async function handleProfileSave() {
     setSavingProfile(true);
     setProfileSaved(false);
@@ -219,7 +215,6 @@ export default function SettingsPage({
         body: JSON.stringify({ hour }),
       });
       if (!res.ok) {
-        // Revert on failure
         fetch("/api/settings/brief-hour").then((r) => r.json()).then((d) => {
           if (typeof d?.hour === "number") setBriefHour(d.hour);
         }).catch(() => {});
@@ -231,7 +226,6 @@ export default function SettingsPage({
     }
   }
 
-  // --- Safari History Import handlers ---
   async function handleSafariUpload(file: File) {
     setSafariError(null);
     if (!supabaseConfigured) {
@@ -240,7 +234,6 @@ export default function SettingsPage({
     }
     setSafariUploading(true);
     try {
-      // Step 1: Create import record + get upload URL
       const createRes = await fetch("/api/history-imports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -256,7 +249,6 @@ export default function SettingsPage({
       }
       const signedUrlToken = { signedUrl, token, path };
 
-      // Step 2: Upload ZIP using Supabase browser client with signed URL
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
       const { error } = await supabase.storage
@@ -264,7 +256,6 @@ export default function SettingsPage({
         .uploadToSignedUrl(signedUrlToken.path, signedUrlToken.token, file);
       if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
-      // Step 3: Process the ZIP server-side
       setSafariUploading(false);
       setSafariProcessing(true);
       const processRes = await fetch(`/api/history-imports/${importId}/process`, {
@@ -277,7 +268,6 @@ export default function SettingsPage({
       const result = await processRes.json();
       setSafariPreview(result.preview);
 
-      // Refresh import status
       setSafariImport({
         id: importId,
         status: "preview_ready",
@@ -327,6 +317,25 @@ export default function SettingsPage({
     }
   }
 
+  // Track active section for sidebar nav highlighting
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(`#${entry.target.id}`);
+          }
+        });
+      },
+      { rootMargin: "-20% 0px -60% 0px" }
+    );
+    sectionLinks.forEach((s) => {
+      const el = document.querySelector(s.href);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
   const activeAccountCount = linkedAccounts.filter(
     (account) => account.status === "active"
   ).length;
@@ -349,25 +358,24 @@ export default function SettingsPage({
     { href: "#danger-zone", label: "Danger zone" },
   ];
 
+  const displayName = profileDisplayName.trim() || "there";
+
   async function handleSignOut() {
     if (!supabaseConfigured) {
       window.location.href = "/login";
       return;
     }
-
     try {
       const browserClient = createClient();
       await browserClient.auth.signOut();
     } catch {
       // ignore
     }
-
     try {
       await fetch("/api/auth/sign-out", { method: "POST" });
     } catch {
       // ignore
     }
-
     window.location.href = "/login";
   }
 
@@ -383,50 +391,50 @@ export default function SettingsPage({
           safariStatusLabel={safariStatusLabel}
           topicCount={topics.size}
           topicHighlights={Array.from(topics)}
+          activeSection={activeSection}
         />
       }
     >
-      <ShellHero className="px-6 py-6 sm:px-8 sm:py-7">
+      {/* ── Hero ──────────────────────────────────────── */}
+      <ShellHero>
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-panel-label shadow-sm">
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              Settings
-            </div>
-            <h1 className="mt-4 text-[clamp(2rem,3.8vw,3.1rem)] font-semibold tracking-tight text-strong">
+            <p
+              className="font-body text-xs font-medium uppercase tracking-widest"
+              style={{ color: "var(--ds-text-dim)" }}
+            >
+              Settings &mdash; {displayName}
+            </p>
+            <h1
+              className="font-display mt-2 text-[clamp(1.6rem,3.2vw,2.4rem)] font-semibold leading-[1.15] tracking-tight"
+              style={{ color: "var(--ds-text)" }}
+            >
               Control your briefing, connections, and privacy.
             </h1>
-            <p className="text-muted mt-3 max-w-2xl text-base leading-relaxed sm:text-lg">
-              Manage your linked accounts, topic preferences, Safari import,
-              and delivery time from one place.
-            </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:w-[320px]">
-            <StatBlock
-              label="Accounts"
-              value={activeAccountCount}
-              detail="linked sources"
-            />
-            <StatBlock
-              label="Topics"
-              value={topics.size}
-              detail="active now"
-            />
+          <div className="grid grid-cols-2 gap-3 sm:w-[280px]">
+            <MetricCard label="Accounts" value={activeAccountCount} detail="linked" />
+            <MetricCard label="Topics" value={topics.size} detail="active" />
           </div>
         </div>
       </ShellHero>
 
-      <ShellSoftCard className="p-2">
-        <div className="flex gap-2 overflow-x-auto">
+      {/* ── Section tabs ──────────────────────────────── */}
+      <ShellSoftCard className="px-2 py-2">
+        <div className="flex gap-1.5 overflow-x-auto">
           {sectionLinks.map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className="text-strong inline-flex shrink-0 items-center rounded-full border px-4 py-2 text-sm font-medium transition hover:-translate-y-0.5 hover:bg-white/70 hover:shadow-sm dark:hover:bg-zinc-800/80"
+              className="inline-flex shrink-0 items-center rounded-full px-4 py-2 text-sm font-medium transition-colors"
               style={{
-                borderColor: "var(--surface-border-white)",
-                backgroundColor: "var(--surface-card-bg)",
+                color: "var(--ds-text-muted)",
+                ...(activeSection === link.href
+                  ? {
+                      backgroundColor: "var(--ds-accent-soft)",
+                      color: "var(--ds-accent)",
+                    }
+                  : {}),
               }}
             >
               {link.label}
@@ -435,20 +443,27 @@ export default function SettingsPage({
         </div>
       </ShellSoftCard>
 
+      {/* ── Config banners ────────────────────────────── */}
       {!supabaseConfigured && (
-        <div className="rounded-[var(--radius-card)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-          Authentication is not configured for this deployment yet. Set the
-          Supabase production env vars in Vercel and redeploy before using
-          profile sync, Safari import, or sign-out.
-        </div>
+        <ShellCard className="border-amber-400/30 p-4">
+          <p
+            className="text-sm leading-relaxed"
+            style={{ color: "var(--ds-text-muted)" }}
+          >
+            Authentication is not configured for this deployment yet. Set the
+            Supabase production env vars in Vercel and redeploy before using
+            profile sync, Safari import, or sign-out.
+          </p>
+        </ShellCard>
       )}
 
       {connectedParam && (
         <div
-          className="motion-fade-up rounded-[var(--radius-card)] border px-4 py-4 text-sm text-emerald-700 shadow-sm dark:text-emerald-200"
+          className="motion-fade-up rounded-[12px] border px-4 py-3 text-sm"
           style={{
-            background: "rgba(16,185,129,0.10)",
-            borderColor: "rgba(16,185,129,0.22)",
+            backgroundColor: "var(--ds-accent-soft)",
+            borderColor: "var(--ds-accent)",
+            color: "var(--ds-accent)",
           }}
         >
           Connected to {connectedParam === "x" ? "X / Twitter" : "Google"}{" "}
@@ -457,10 +472,10 @@ export default function SettingsPage({
       )}
       {errorParam && (
         <div
-          className="motion-fade-up rounded-[var(--radius-card)] border px-4 py-4 text-sm text-red-700 shadow-sm dark:text-red-200"
+          className="motion-fade-up rounded-[12px] border px-4 py-3 text-sm"
           style={{
-            background: "rgba(244,63,94,0.10)",
-            borderColor: "rgba(239,68,68,0.22)",
+            borderColor: "rgba(239,68,68,0.35)",
+            color: "#ef4444",
           }}
         >
           Connection failed: {decodeURIComponent(errorParam)}
@@ -468,10 +483,10 @@ export default function SettingsPage({
       )}
       {connectError && (
         <div
-          className="motion-fade-up rounded-[var(--radius-card)] border px-4 py-4 text-sm text-red-700 shadow-sm dark:text-red-200"
+          className="motion-fade-up rounded-[12px] border px-4 py-3 text-sm"
           style={{
-            background: "rgba(244,63,94,0.10)",
-            borderColor: "rgba(239,68,68,0.22)",
+            borderColor: "rgba(239,68,68,0.35)",
+            color: "#ef4444",
           }}
         >
           {connectError}
@@ -481,17 +496,23 @@ export default function SettingsPage({
         </div>
       )}
 
+      {/* ── Profile ───────────────────────────────────── */}
       <section id="your-profile" className="scroll-mt-8">
         <ShellCard className="p-6">
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-950 shadow-sm dark:bg-zinc-100 dark:text-zinc-950">
-              <User className="h-6 w-6 text-sky-600" />
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-[10px]"
+              style={{
+                backgroundColor: "var(--ds-surface-2)",
+              }}
+            >
+              <User className="h-5 w-5" style={{ color: "var(--ds-accent)" }} />
             </div>
             <div>
-              <p className="text-strong text-sm font-medium">
+              <p className="text-sm font-semibold" style={{ color: "var(--ds-text)" }}>
                 Display name &amp; timezone
               </p>
-              <p className="text-muted text-xs">
+              <p className="text-xs" style={{ color: "var(--ds-text-dim)" }}>
                 Customize how your briefing addresses you
               </p>
             </div>
@@ -501,7 +522,8 @@ export default function SettingsPage({
             <div>
               <label
                 htmlFor="profile-display-name"
-                className="text-panel-label mb-1.5 block text-sm font-medium"
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: "var(--ds-text-muted)" }}
               >
                 Display Name
               </label>
@@ -512,18 +534,15 @@ export default function SettingsPage({
                 onChange={(e) => setProfileDisplayName(e.target.value)}
                 placeholder="How should we greet you?"
                 maxLength={50}
-                className="w-full rounded-[1.15rem] border px-4 py-3 text-sm text-strong shadow-sm outline-none transition placeholder:text-subtle focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/20"
-                style={{
-                  backgroundColor: "var(--surface-status-bg)",
-                  borderColor: "var(--surface-border-white)",
-                }}
+                className="ds-input w-full"
               />
             </div>
 
             <div>
               <label
                 htmlFor="profile-timezone"
-                className="text-panel-label mb-1.5 block text-sm font-medium"
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: "var(--ds-text-muted)" }}
               >
                 Timezone
               </label>
@@ -531,11 +550,7 @@ export default function SettingsPage({
                 id="profile-timezone"
                 value={profileTimezone}
                 onChange={(e) => setProfileTimezone(e.target.value)}
-                className="w-full rounded-[1.15rem] border px-4 py-3 text-sm text-strong shadow-sm outline-none transition focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/20"
-                style={{
-                  backgroundColor: "var(--surface-status-bg)",
-                  borderColor: "var(--surface-border-white)",
-                }}
+                className="ds-select w-full"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>
@@ -549,16 +564,16 @@ export default function SettingsPage({
               <button
                 onClick={handleProfileSave}
                 disabled={savingProfile}
-                className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+                className="ds-btn"
               >
                 {savingProfile ? (
                   <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-950/20 border-t-zinc-950" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current opacity-30 border-t-current" />
                     Saving&hellip;
                   </>
                 ) : profileSaved ? (
                   <>
-                    <Check className="h-4 w-4 text-emerald-500" />
+                    <Check className="h-4 w-4" />
                     Saved
                   </>
                 ) : (
@@ -573,13 +588,14 @@ export default function SettingsPage({
         </ShellCard>
       </section>
 
+      {/* ── Appearance ────────────────────────────────── */}
       <section id="appearance" className="scroll-mt-8">
         <ShellCard className="p-6">
           <div className="mb-5">
-            <h2 className="text-strong text-xl font-semibold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
               Appearance
             </h2>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
               Switch between light and dark mode. Your preference syncs across
               devices.
             </p>
@@ -588,14 +604,15 @@ export default function SettingsPage({
         </ShellCard>
       </section>
 
+      {/* ── Safari History Import ─────────────────────── */}
       <section id="safari-history-import" className="scroll-mt-8">
         <ShellCard className="p-6">
           <div className="mb-5">
-            <h2 className="text-strong text-xl font-semibold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
               Safari History Import
             </h2>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
-              Strengthen your profile with Safari history. Safari ZIP only —
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
+              Strengthen your profile with Safari history. Safari ZIP only &mdash;
               passwords, cards, bookmarks ignored. Raw file deleted after
               processing.
             </p>
@@ -614,13 +631,14 @@ export default function SettingsPage({
         </ShellCard>
       </section>
 
+      {/* ── Linked Accounts ───────────────────────────── */}
       <section id="linked-accounts" className="scroll-mt-8">
         <ShellCard className="p-6">
           <div className="mb-5">
-            <h2 className="text-strong text-xl font-semibold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
               Linked Accounts
             </h2>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
               Connected sources and future integrations will live here.
             </p>
           </div>
@@ -638,41 +656,38 @@ export default function SettingsPage({
             <ComingSoonCard
               Icon={CircleUser}
               label="Facebook"
-              description="Not yet supported — coming soon"
+              description="Not yet supported &mdash; coming soon"
             />
             <ComingSoonCard
               Icon={Building2}
               label="Microsoft"
-              description="Not yet supported — coming soon"
+              description="Not yet supported &mdash; coming soon"
             />
           </div>
         </ShellCard>
       </section>
 
+      {/* ── Brief Delivery Time ───────────────────────── */}
       <section id="brief-delivery-time" className="scroll-mt-8">
         <ShellCard className="p-6">
           <div className="mb-5">
-            <h2 className="text-strong text-xl font-semibold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
               Brief Delivery Time
             </h2>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
               Set the local hour when your daily briefing will be ready. Your
               brief is generated shortly before this time.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <label htmlFor="brief-hour" className="text-muted text-sm">
+            <label htmlFor="brief-hour" className="text-sm" style={{ color: "var(--ds-text-muted)" }}>
               Brief ready at:
             </label>
             <select
               id="brief-hour"
               value={briefHour}
               onChange={(e) => handleBriefHourChange(parseInt(e.target.value, 10))}
-              className="rounded-[1.15rem] border px-4 py-3 text-sm text-strong shadow-sm outline-none transition focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/20"
-              style={{
-                backgroundColor: "var(--surface-status-bg)",
-                borderColor: "var(--surface-border-white)",
-              }}
+              className="ds-select"
             >
               {Array.from({ length: 24 }, (_, h) => {
                 const display12 =
@@ -690,24 +705,25 @@ export default function SettingsPage({
                 );
               })}
             </select>
-            <span className="text-muted text-xs">local time</span>
+            <span className="text-xs" style={{ color: "var(--ds-text-dim)" }}>local time</span>
           </div>
         </ShellCard>
       </section>
 
+      {/* ── Topic Preferences ─────────────────────────── */}
       <section id="topic-preferences" className="scroll-mt-8">
         <ShellCard className="p-6">
           <div className="mb-5">
-            <h2 className="text-strong text-xl font-semibold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
               Topic Preferences
             </h2>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
               These topics influence which articles appear in your briefing. We
               auto-detect interests from your linked accounts. You can also
               adjust weights manually.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="flex flex-wrap gap-2">
             {TOPIC_TAXONOMY.map((topic) => {
               if (!showAllTopics && !topics.has(topic)) return null;
               return (
@@ -724,7 +740,8 @@ export default function SettingsPage({
           {!showAllTopics && (
             <button
               onClick={() => setShowAllTopics(true)}
-              className="text-muted mt-3 text-sm underline decoration-zinc-400 underline-offset-4 transition hover:text-strong"
+              className="mt-3 text-sm underline decoration-zinc-400 underline-offset-4 transition hover:text-strong"
+              style={{ color: "var(--ds-text-dim)" }}
             >
               Show all {TOPIC_TAXONOMY.length} topics
             </button>
@@ -732,14 +749,15 @@ export default function SettingsPage({
         </ShellCard>
       </section>
 
+      {/* ── Privacy ───────────────────────────────────── */}
       <section id="privacy" className="scroll-mt-8">
         <ShellCard className="p-6">
           <div className="mb-5">
-            <h2 className="text-strong text-xl font-semibold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
               Privacy
             </h2>
           </div>
-          <div className="space-y-3 text-sm text-muted">
+          <div className="space-y-3 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
             <p>
               We encrypt your OAuth tokens using AES-256-GCM at rest. Your
               tokens are never stored in plaintext.
@@ -757,14 +775,14 @@ export default function SettingsPage({
             <div className="flex flex-wrap gap-3 pt-2">
               <Link
                 href="/privacy"
-                className="inline-flex items-center gap-1 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition hover:-translate-y-0.5 hover:bg-white/80"
+                className="ds-link-card"
               >
                 Privacy Policy
                 <ChevronRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/terms"
-                className="inline-flex items-center gap-1 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition hover:-translate-y-0.5 hover:bg-white/80"
+                className="ds-link-card"
               >
                 Terms of Service
                 <ChevronRight className="h-4 w-4" />
@@ -774,15 +792,21 @@ export default function SettingsPage({
         </ShellCard>
       </section>
 
+      {/* ── Danger Zone ───────────────────────────────── */}
       <section id="danger-zone" className="scroll-mt-8">
         <ShellCard
-          className="border border-red-500/20 bg-[rgba(239,68,68,0.06)] p-6 shadow-[var(--shadow-soft)]"
+          className="p-6"
         >
+          <style jsx>{`
+            #danger-zone > section {
+              border-color: rgba(239, 68, 68, 0.25) !important;
+            }
+          `}</style>
           <div className="mb-5">
-            <h2 className="text-xl font-semibold tracking-tight text-red-600 dark:text-red-300">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "#ef4444" }}>
               Danger Zone
             </h2>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
               Permanently delete your account and all associated data. This
               includes your profile, linked accounts, topic preferences, daily
               briefs, interest signals, and feedback events. This action cannot
@@ -792,7 +816,7 @@ export default function SettingsPage({
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={handleSignOut}
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition hover:-translate-y-0.5 hover:bg-white/80"
+              className="ds-btn-secondary"
             >
               <LogOut className="h-4 w-4" />
               Sign out
@@ -805,7 +829,9 @@ export default function SettingsPage({
   );
 }
 
-function StatBlock({
+// ── Shared primitives ────────────────────────────────────────
+
+function MetricCard({
   label,
   value,
   detail,
@@ -816,19 +842,29 @@ function StatBlock({
 }) {
   return (
     <div
-      className="rounded-[1.35rem] border p-4"
+      className="rounded-[10px] border p-3"
       style={{
-        background: "var(--surface-card-bg-strong)",
-        borderColor: "var(--surface-border-white)",
+        backgroundColor: "var(--ds-surface-2)",
+        borderColor: "var(--ds-border)",
       }}
     >
-      <p className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.26em]">
+      <p
+        className="text-[10px] font-semibold uppercase tracking-widest"
+        style={{ color: "var(--ds-text-dim)" }}
+      >
         {label}
       </p>
-      <p className="text-strong mt-2 text-2xl font-semibold tracking-tight">
+      <p
+        className="mt-1.5 text-xl font-semibold tracking-tight"
+        style={{ color: "var(--ds-text)" }}
+      >
         {value}
       </p>
-      {detail ? <p className="text-muted mt-1 text-xs">{detail}</p> : null}
+      {detail && (
+        <p className="mt-0.5 text-[11px]" style={{ color: "var(--ds-text-dim)" }}>
+          {detail}
+        </p>
+      )}
     </div>
   );
 }
@@ -840,6 +876,7 @@ function SettingsSidebar({
   safariStatusLabel,
   topicCount,
   topicHighlights,
+  activeSection,
 }: {
   activeAccountCount: number;
   briefHourLabel: string;
@@ -847,32 +884,46 @@ function SettingsSidebar({
   safariStatusLabel: string;
   topicCount: number;
   topicHighlights: string[];
+  activeSection: string;
 }) {
   return (
     <div className="hidden lg:block">
-      <div className="sticky top-0 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-hidden rounded-[var(--radius-hero)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] p-5 shadow-[var(--shadow-hero)] backdrop-blur-[var(--glass-panel-blur)]">
+      <div
+        className="sticky top-0 flex max-h-[calc(100vh-2rem)] flex-col gap-5 overflow-hidden rounded-[12px] border p-5"
+        style={{
+          backgroundColor: "var(--ds-surface-1)",
+          borderColor: "var(--ds-border)",
+        }}
+      >
+        {/* Brand */}
         <div className="inline-flex items-center gap-3">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white shadow-[0_16px_30px_-18px_rgba(15,23,42,0.9)] dark:bg-zinc-100 dark:text-zinc-950">
-            <Newspaper className="h-5 w-5" />
+          <span
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[10px]"
+            style={{
+              backgroundColor: "var(--ds-accent)",
+            }}
+          >
+            <Newspaper className="h-5 w-5" style={{ color: "var(--ds-bg)" }} />
           </span>
           <div>
-            <h2 className="text-strong text-lg font-semibold tracking-tight">
+            <h2
+              className="text-base font-semibold tracking-tight"
+              style={{ color: "var(--ds-text)" }}
+            >
               AI News Digest
             </h2>
-            <p className="text-muted text-sm">Settings hub</p>
+            <p className="text-sm" style={{ color: "var(--ds-text-dim)" }}>Settings hub</p>
           </div>
         </div>
 
+        {/* Stat tiles */}
         <div className="grid grid-cols-2 gap-3">
-          <StatBlock
-            label="Accounts"
-            value={activeAccountCount}
-            detail="linked sources"
-          />
-          <StatBlock label="Topics" value={topicCount} detail="active now" />
+          <MetricCard label="Accounts" value={activeAccountCount} detail="linked" />
+          <MetricCard label="Topics" value={topicCount} detail="active" />
         </div>
 
-        <nav className="space-y-2">
+        {/* Nav */}
+        <nav className="space-y-1">
           {sidebarLinks.map((link) => {
             const active = link.href === "/settings";
             return (
@@ -880,80 +931,85 @@ function SettingsSidebar({
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`group flex items-center rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                  active
-                    ? "bg-zinc-100 text-zinc-950 shadow-[0_18px_36px_-24px_rgba(15,23,42,0.9)] dark:bg-zinc-100 dark:text-zinc-950"
-                    : "text-zinc-950 hover:-translate-y-0.5 hover:bg-white/90 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                }`}
+                className="group flex items-center rounded-[10px] px-3.5 py-2.5 text-sm font-medium transition-colors"
                 style={{
-                  borderColor: active
-                    ? "rgba(15,23,42,0.05)"
-                    : "var(--surface-border-white)",
-                  backgroundColor: active ? undefined : "var(--surface-card-bg)",
+                  color: active ? "var(--ds-accent)" : "var(--ds-text-muted)",
+                  backgroundColor: active ? "var(--ds-accent-soft)" : "transparent",
+                  boxShadow: active && typeof window !== "undefined" && document.documentElement.classList.contains("dark")
+                    ? "var(--ds-accent-glow)"
+                    : "none",
                 }}
               >
                 {link.label}
                 <ChevronRight
-                  className={`ml-auto h-4 w-4 transition ${
-                    active
-                      ? "opacity-80"
-                      : "opacity-35 group-hover:opacity-60"
-                  }`}
+                  className="ml-auto h-4 w-4 transition-opacity"
+                  style={{ opacity: active ? 0.8 : 0.3 }}
                 />
               </Link>
             );
           })}
         </nav>
 
+        {/* Personalization panel */}
         <section
-          className="rounded-[1.4rem] border p-4"
+          className="rounded-[10px] border p-4"
           style={{
-            background: "var(--surface-soft-panel)",
-            borderColor: "var(--surface-border-white)",
+            backgroundColor: "var(--ds-surface-2)",
+            borderColor: "var(--ds-border)",
           }}
         >
-          <div className="text-panel-label flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.26em]">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+          <div
+            className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest"
+            style={{ color: "var(--ds-text-dim)" }}
+          >
+            <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--ds-accent)" }} />
             Personalization
           </div>
-          <dl className="mt-4 space-y-3 text-sm">
+          <dl className="mt-3 space-y-2.5 text-sm">
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">Profile</dt>
-              <dd className="text-strong font-medium">
+              <dt style={{ color: "var(--ds-text-dim)" }}>Profile</dt>
+              <dd className="font-medium" style={{ color: "var(--ds-text)" }}>
                 {profileReady ? "Ready" : "Unset"}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">Brief time</dt>
-              <dd className="text-strong font-medium">{briefHourLabel}</dd>
+              <dt style={{ color: "var(--ds-text-dim)" }}>Brief time</dt>
+              <dd className="font-medium" style={{ color: "var(--ds-text)" }}>
+                {briefHourLabel}
+              </dd>
             </div>
           </dl>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             <span
-              className="rounded-full border px-3 py-1 text-[11px] font-medium text-muted"
+              className="rounded-full border px-2.5 py-0.5 text-[10px] font-medium"
               style={{
-                background: "rgba(56, 189, 248, 0.08)",
-                borderColor: "rgba(56, 189, 248, 0.16)",
+                color: "var(--ds-text-dim)",
+                borderColor: "var(--ds-border)",
+                backgroundColor: "var(--ds-surface-1)",
               }}
             >
               {safariStatusLabel}
             </span>
-            <span
-              className="rounded-full border px-3 py-1 text-[11px] font-medium text-muted"
-              style={{
-                background: "rgba(56, 189, 248, 0.08)",
-                borderColor: "rgba(56, 189, 248, 0.16)",
-              }}
-            >
-              {topicCount} topics
-            </span>
+            {topicCount > 0 && (
+              <span
+                className="rounded-full border px-2.5 py-0.5 text-[10px] font-medium"
+                style={{
+                  color: "var(--ds-text-dim)",
+                  borderColor: "var(--ds-border)",
+                  backgroundColor: "var(--ds-surface-1)",
+                }}
+              >
+                {topicCount} topics
+              </span>
+            )}
             {topicHighlights.slice(0, 2).map((topic) => (
               <span
                 key={topic}
-                className="rounded-full border px-3 py-1 text-[11px] font-medium text-muted"
+                className="rounded-full border px-2.5 py-0.5 text-[10px] font-medium"
                 style={{
-                  background: "rgba(56, 189, 248, 0.08)",
-                  borderColor: "rgba(56, 189, 248, 0.16)",
+                  color: "var(--ds-text-dim)",
+                  borderColor: "var(--ds-border)",
+                  backgroundColor: "var(--ds-surface-1)",
                 }}
               >
                 {topic.replace(/_/g, " ")}
@@ -962,7 +1018,11 @@ function SettingsSidebar({
           </div>
         </section>
 
-        <div className="mt-auto border-t pt-4" style={{ borderColor: "var(--surface-border-subtle)" }}>
+        {/* Theme toggle at bottom */}
+        <div
+          className="mt-auto pt-4"
+          style={{ borderTop: "1px solid var(--ds-border)" }}
+        >
           <ThemeToggle />
         </div>
       </div>
@@ -975,28 +1035,37 @@ function ComingSoonCard({
   label,
   description,
 }: {
-  Icon: React.ComponentType<{ className?: string }>;
+  Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   label: string;
   description: string;
 }) {
   return (
     <div
-      className="flex items-center justify-between rounded-[var(--radius-card)] border border-dashed p-5 opacity-85 shadow-sm"
+      className="flex items-center justify-between rounded-[10px] border border-dashed p-4"
       style={{
-        borderColor: "var(--surface-border-subtle)",
-        backgroundColor: "var(--surface-card-bg)",
+        borderColor: "var(--ds-border)",
+        backgroundColor: "var(--ds-surface-1)",
       }}
     >
       <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-zinc-100 p-2 text-zinc-950 shadow-sm dark:bg-zinc-100 dark:text-zinc-950">
-          <Icon className="h-5 w-5 text-sky-600" />
+        <div
+          className="rounded-[10px] p-2"
+          style={{
+            backgroundColor: "var(--ds-surface-2)",
+          }}
+        >
+          <Icon className="h-4 w-4" style={{ color: "var(--ds-accent)" }} />
         </div>
         <div>
-          <p className="text-strong text-sm font-medium">{label}</p>
-          <p className="text-muted text-xs">{description}</p>
+          <p className="text-sm font-medium" style={{ color: "var(--ds-text)" }}>
+            {label}
+          </p>
+          <p className="text-xs" style={{ color: "var(--ds-text-dim)" }}>
+            {description}
+          </p>
         </div>
       </div>
-      <span className="text-muted text-xs italic">Coming soon</span>
+      <span className="text-xs italic" style={{ color: "var(--ds-text-dim)" }}>Coming soon</span>
     </div>
   );
 }
@@ -1018,14 +1087,14 @@ function TopicBadge({
 
   return (
     <label
-      className="group flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5"
+      className="ds-topic-pill group flex cursor-pointer items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors"
       style={{
-        backgroundColor: checked
-          ? "rgba(56, 189, 248, 0.12)"
-          : "var(--surface-card-bg)",
-        borderColor: checked
-          ? "rgba(56, 189, 248, 0.28)"
-          : "var(--surface-border-white)",
+        backgroundColor: checked ? "var(--ds-accent-soft)" : "var(--ds-surface-1)",
+        borderColor: checked ? "var(--ds-accent)" : "var(--ds-border)",
+        color: checked ? "var(--ds-accent)" : "var(--ds-text-muted)",
+        cursor: disabled ? "wait" : "pointer",
+        borderWidth: checked ? "1px" : undefined,
+        borderStyle: "solid",
       }}
     >
       <input
@@ -1033,9 +1102,9 @@ function TopicBadge({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(topic, e.target.checked)}
-        className="rounded border-zinc-300 accent-sky-600"
+        className="ds-checkbox mr-1 cursor-pointer accent-[var(--ds-accent)]"
       />
-      <span className="text-strong group-hover:text-strong">{formatted}</span>
+      <span>{formatted}</span>
     </label>
   );
 }
@@ -1074,21 +1143,29 @@ function DeleteAccountButton() {
       {!confirmed ? (
         <button
           onClick={handleDelete}
-          className="rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-400"
+          className="rounded-[10px] px-4 py-2.5 text-sm font-medium transition-colors"
+          style={{
+            backgroundColor: "rgba(239,68,68,0.15)",
+            color: "#ef4444",
+          }}
         >
           Delete Account
         </button>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+          <p className="text-sm font-semibold" style={{ color: "#ef4444" }}>
             Are you sure? Click below to permanently delete your account.
           </p>
-          {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
+          {error && <p className="text-sm" style={{ color: "#ef4444" }}>{error}</p>}
           <div className="flex gap-3">
             <button
               onClick={handleDelete}
               disabled={isPending}
-              className="rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-400 disabled:opacity-50"
+              className="rounded-[10px] px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: "#ef4444",
+                color: "#fff",
+              }}
             >
               {isPending ? "Deleting..." : "Yes, Delete Account"}
             </button>
@@ -1098,7 +1175,12 @@ function DeleteAccountButton() {
                 setError(null);
               }}
               disabled={isPending}
-              className="rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition-colors hover:bg-white/80 disabled:opacity-50"
+              className="rounded-[10px] border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+              style={{
+                borderColor: "var(--ds-border)",
+                backgroundColor: "var(--ds-surface-1)",
+                color: "var(--ds-text-muted)",
+              }}
             >
               Cancel
             </button>
@@ -1163,61 +1245,64 @@ function SafariImportSection({
     const summary = safariImport.summary;
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
+        <div className="flex items-center gap-2 text-sm" style={{ color: "var(--ds-accent)" }}>
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
           <span className="font-medium">History imported successfully</span>
         </div>
-        <p className="text-muted text-xs">
+        <p className="text-xs" style={{ color: "var(--ds-text-dim)" }}>
           Safari history signals are influencing your daily brief.
         </p>
         {summary ? (
           <div
-            className="rounded-[1.25rem] border p-4 shadow-sm"
+            className="rounded-[10px] border p-4"
             style={{
-              backgroundColor: "var(--surface-status-bg)",
-              borderColor: "var(--surface-border-white)",
+              backgroundColor: "var(--ds-surface-2)",
+              borderColor: "var(--ds-border)",
             }}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="max-w-2xl">
-                <p className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.26em]">
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--ds-text-dim)" }}
+                >
                   Safari profile summary
                 </p>
-                <p className="text-strong mt-2 text-sm leading-6">
+                <p className="mt-2 text-sm leading-6" style={{ color: "var(--ds-text)" }}>
                   {summary.behaviorBlurb}
                 </p>
               </div>
               <div
-                className="rounded-full border px-3 py-1 text-xs font-medium text-strong"
+                className="rounded-full border px-3 py-1 text-xs font-medium"
                 style={{
-                  backgroundColor: "var(--surface-card-bg)",
-                  borderColor: "var(--surface-border-white)",
+                  backgroundColor: "var(--ds-surface-1)",
+                  borderColor: "var(--ds-border)",
+                  color: "var(--ds-text)",
                 }}
               >
                 {summary.acceptedCount.toLocaleString()} accepted visits
               </div>
             </div>
 
-            {summary.topTopics.length > 0 ? (
+            {summary.topTopics.length > 0 && (
               <div className="mt-4">
-                <h3 className="text-subtle mb-2 text-xs font-semibold uppercase tracking-[0.22em]">
+                <h3
+                  className="mb-2 text-[10px] font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--ds-text-dim)" }}
+                >
                   Top interests
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {summary.topTopics.map((item) => (
                     <span
                       key={item.topic}
-                      className="rounded-full border px-2.5 py-1 text-xs text-strong shadow-sm"
+                      className="rounded-full border px-2.5 py-1 text-xs"
                       style={{
-                        backgroundColor: "var(--surface-card-bg)",
-                        borderColor: "var(--surface-border-white)",
+                        backgroundColor: "var(--ds-surface-1)",
+                        borderColor: "var(--ds-border)",
+                        color: "var(--ds-text)",
                       }}
                     >
                       {humanizeSafariTopic(item.topic)} ({item.count})
@@ -1225,45 +1310,56 @@ function SafariImportSection({
                   ))}
                 </div>
               </div>
-            ) : null}
+            )}
 
-            {summary.topDomains.length > 0 ? (
+            {summary.topDomains.length > 0 && (
               <div className="mt-4">
-                <h3 className="text-subtle mb-2 text-xs font-semibold uppercase tracking-[0.22em]">
+                <h3
+                  className="mb-2 text-[10px] font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--ds-text-dim)" }}
+                >
                   Top domains
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {summary.topDomains.map((item) => (
                     <span
                       key={item.domain}
-                      className="rounded-full border px-2.5 py-1 text-xs text-strong shadow-sm"
+                      className="rounded-full border px-2.5 py-1 text-xs"
                       style={{
-                        backgroundColor: "var(--surface-card-bg)",
-                        borderColor: "var(--surface-border-white)",
+                        backgroundColor: "var(--ds-surface-1)",
+                        borderColor: "var(--ds-border)",
+                        color: "var(--ds-text)",
                       }}
                     >
                       {item.domain}
-                      <span className="text-muted"> ({item.count})</span>
+                      <span style={{ color: "var(--ds-text-dim)" }}> ({item.count})</span>
                     </span>
                   ))}
                 </div>
               </div>
-            ) : null}
+            )}
           </div>
         ) : null}
         <div className="flex flex-wrap gap-3 pt-2">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"
+            className="ds-btn"
           >
             Replace Import
           </button>
           <button
             onClick={onDelete}
-            className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-[rgba(239,68,68,0.08)] px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-[rgba(239,68,68,0.12)] dark:text-red-300"
+            className="rounded-[10px] border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-red-500/10"
+            style={{
+              borderColor: "rgba(239,68,68,0.25)",
+              backgroundColor: "rgba(239,68,68,0.05)",
+              color: "#ef4444",
+            }}
           >
-            <Trash2 className="h-4 w-4" />
-            Delete History Signals
+            <span className="inline-flex items-center gap-1.5">
+              <Trash2 className="h-4 w-4" />
+              Delete History Signals
+            </span>
           </button>
           <input
             ref={fileInputRef}
@@ -1287,58 +1383,28 @@ function SafariImportSection({
     return (
       <div className="space-y-4">
         <div className="grid gap-3 text-sm sm:grid-cols-3">
-          <div
-            className="rounded-[1.25rem] border px-3 py-3 text-center shadow-sm"
-            style={{
-              backgroundColor: "var(--surface-card-bg)",
-              borderColor: "var(--surface-border-white)",
-            }}
-          >
-            <div className="text-strong text-lg font-semibold">
-              {preview.totalVisits.toLocaleString()}
-            </div>
-            <div className="text-muted text-xs">Total Visits</div>
-          </div>
-          <div
-            className="rounded-[1.25rem] border px-3 py-3 text-center shadow-sm"
-            style={{
-              backgroundColor: "var(--surface-card-bg)",
-              borderColor: "var(--surface-border-white)",
-            }}
-          >
-            <div className="text-strong text-lg font-semibold">
-              {preview.acceptedCount.toLocaleString()}
-            </div>
-            <div className="text-muted text-xs">Accepted</div>
-          </div>
-          <div
-            className="rounded-[1.25rem] border px-3 py-3 text-center shadow-sm"
-            style={{
-              backgroundColor: "var(--surface-card-bg)",
-              borderColor: "var(--surface-border-white)",
-            }}
-          >
-            <div className="text-strong text-lg font-semibold">
-              {preview.rejectedCount.toLocaleString()}
-            </div>
-            <div className="text-muted text-xs">Rejected</div>
-          </div>
+          <MiniStat value={preview.totalVisits.toLocaleString()} label="Total Visits" />
+          <MiniStat value={preview.acceptedCount.toLocaleString()} label="Accepted" />
+          <MiniStat value={preview.rejectedCount.toLocaleString()} label="Rejected" />
         </div>
 
         <div>
-          <h3 className="text-muted mb-2 text-sm font-medium">Top Domains</h3>
+          <h3 className="mb-2 text-sm font-medium" style={{ color: "var(--ds-text-muted)" }}>
+            Top Domains
+          </h3>
           <div className="flex flex-wrap gap-2">
             {preview.topDomains.slice(0, 10).map((d) => (
               <span
                 key={d.domain}
-                className="rounded-full border px-2 py-1 text-xs text-strong shadow-sm"
+                className="rounded-full border px-2.5 py-1 text-xs"
                 style={{
-                  backgroundColor: "var(--surface-card-bg)",
-                  borderColor: "var(--surface-border-white)",
+                  backgroundColor: "var(--ds-surface-2)",
+                  borderColor: "var(--ds-border)",
+                  color: "var(--ds-text)",
                 }}
               >
                 {d.domain}{" "}
-                <span className="text-muted">({d.count})</span>
+                <span style={{ color: "var(--ds-text-dim)" }}>({d.count})</span>
               </span>
             ))}
           </div>
@@ -1346,7 +1412,7 @@ function SafariImportSection({
 
         {topTopics.length > 0 && (
           <div>
-            <h3 className="text-muted mb-2 text-sm font-medium">
+            <h3 className="mb-2 text-sm font-medium" style={{ color: "var(--ds-text-muted)" }}>
               Inferred Topics
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -1357,7 +1423,12 @@ function SafariImportSection({
                 return (
                   <span
                     key={t.topic}
-                    className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-xs text-sky-700 dark:text-sky-200"
+                    className="rounded-full border px-2.5 py-1 text-xs"
+                    style={{
+                      backgroundColor: "var(--ds-accent-soft)",
+                      borderColor: "var(--ds-accent)",
+                      color: "var(--ds-accent)",
+                    }}
                   >
                     {display}
                   </span>
@@ -1367,23 +1438,20 @@ function SafariImportSection({
           </div>
         )}
 
-        <p className="text-muted text-xs">
-          Date range: {new Date(preview.dateRange.start).toLocaleDateString()} →{" "}
+        <p className="text-xs" style={{ color: "var(--ds-text-dim)" }}>
+          Date range: {new Date(preview.dateRange.start).toLocaleDateString()} &rarr;{" "}
           {new Date(preview.dateRange.end).toLocaleDateString()}
         </p>
 
-        {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
+        {error && <p className="text-sm" style={{ color: "#ef4444" }}>{error}</p>}
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <button
-            onClick={onConfirm}
-            className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"
-          >
+          <button onClick={onConfirm} className="ds-btn">
             Confirm Import
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-sm font-medium text-strong transition-colors hover:bg-white/80"
+            className="ds-btn-secondary"
           >
             Cancel / Re-upload
           </button>
@@ -1402,23 +1470,27 @@ function SafariImportSection({
   return (
     <div className="space-y-4">
       {uploading && (
-        <div className="flex items-center gap-3 text-sm text-muted">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-sky-500" />
+        <div className="flex items-center gap-3 text-sm" style={{ color: "var(--ds-text-muted)" }}>
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-current opacity-30 border-t-current">
+            <span className="sr-only">Uploading...</span>
+          </div>
           <span>Uploading...</span>
         </div>
       )}
       {processing && (
-        <div className="flex items-center gap-3 text-sm text-muted">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-sky-500" />
+        <div className="flex items-center gap-3 text-sm" style={{ color: "var(--ds-text-muted)" }}>
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-current opacity-30 border-t-current">
+            <span className="sr-only">Processing your Safari history...</span>
+          </div>
           <span>Processing your Safari history...</span>
         </div>
       )}
-      {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
+      {error && <p className="text-sm" style={{ color: "#ef4444" }}>{error}</p>}
 
       {!uploading && !processing && (
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"
+          className="ds-btn"
         >
           <Globe className="h-4 w-4" />
           Upload Safari Export ZIP
@@ -1432,6 +1504,23 @@ function SafariImportSection({
         className="hidden"
         onChange={handleFileChange}
       />
+    </div>
+  );
+}
+
+function MiniStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div
+      className="rounded-[10px] border px-3 py-3 text-center"
+      style={{
+        backgroundColor: "var(--ds-surface-2)",
+        borderColor: "var(--ds-border)",
+      }}
+    >
+      <div className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
+        {value}
+      </div>
+      <div className="text-xs" style={{ color: "var(--ds-text-dim)" }}>{label}</div>
     </div>
   );
 }

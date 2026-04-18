@@ -103,6 +103,15 @@ npx prisma migrate deploy
 
 against the production database as part of your release workflow before or alongside the deploy.
 
+## UI Source of Truth
+
+The app follows a Stitch-aligned editorial design system with dual art-directed modes (noir dark, markup-paper light). Before modifying any visual element, consult:
+
+- **[Design System](docs/design-system.md)** — tokens, typography, surfaces, borders, buttons, tabs, and explicit don'ts
+- **[UI Redesign Spec](docs/ui-redesign-spec.md)** — screen-by-screen blueprint, component inventory, and QA checklist
+
+All pages use design tokens prefixed `--ds-*` in `src/app/globals.css` and shell primitives in `src/components/page-shell.tsx`. Glassmorphism, ambient gradients, and shimmer effects have been removed.
+
 ## Verification
 
 These checks passed against the current repo state:

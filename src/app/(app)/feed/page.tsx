@@ -48,17 +48,15 @@ interface BriefProgressState {
 const sidebarLinks = [
   { href: "/feed", label: "Feed" },
   { href: "/settings", label: "Settings" },
-  { href: "/privacy", label: "Privacy" },
-  { href: "/terms", label: "Terms" },
+  { href: "/privacy", label: "Privacy Policy" },
+  { href: "/terms", label: "Terms of Service" },
 ];
 
 const fallbackGradients = [
-  "linear-gradient(135deg, rgba(15,23,42,0.92), rgba(59,130,246,0.74))",
-  "linear-gradient(135deg, rgba(194,65,12,0.9), rgba(251,146,60,0.76))",
-  "linear-gradient(135deg, rgba(67,56,202,0.92), rgba(37,99,235,0.72))",
+  "linear-gradient(135deg, var(--ds-surface-2), var(--ds-surface-1))",
+  "linear-gradient(135deg, var(--ds-surface-1), var(--ds-bg))",
+  "linear-gradient(135deg, var(--ds-surface-2), var(--ds-bg))",
 ];
-
-const decorTiles = ["/window.svg", "/globe.svg", "/file.svg"];
 
 interface PersonalizationData {
   topicsCovered: number;
@@ -106,7 +104,9 @@ function getDisplayNameFallback(email: string): string {
   return match ? match[1].charAt(0).toUpperCase() + match[1].slice(1) : "there";
 }
 
-function StatBlock({
+// ── Sidebar mini stat ───────────────────────────────────────────
+
+function SidebarStat({
   label,
   value,
   detail,
@@ -117,19 +117,23 @@ function StatBlock({
 }) {
   return (
     <div
-      className="rounded-[1.35rem] border p-4"
+      className="rounded-[10px] border p-3"
       style={{
-        background: "var(--surface-card-bg-strong)",
-        borderColor: "var(--surface-border-white)",
+        backgroundColor: "var(--ds-surface-2)",
+        borderColor: "var(--ds-border)",
       }}
     >
-      <p className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.26em]">
+      <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--ds-text-dim)" }}>
         {label}
       </p>
-      <p className="text-strong mt-2 text-2xl font-semibold tracking-tight">
+      <p className="mt-1.5 text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
         {value}
       </p>
-      {detail ? <p className="text-muted mt-1 text-xs">{detail}</p> : null}
+      {detail && (
+        <p className="mt-0.5 text-[11px]" style={{ color: "var(--ds-text-dim)" }}>
+          {detail}
+        </p>
+      )}
     </div>
   );
 }
@@ -153,37 +157,38 @@ function DesktopSidebar({
 
   return (
     <div className="hidden lg:block">
-      <div className="sticky top-0 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-hidden rounded-[var(--radius-hero)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] p-5 shadow-[var(--shadow-hero)] backdrop-blur-[var(--glass-panel-blur)]">
-        <div>
-          <div className="inline-flex items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white shadow-[0_16px_30px_-18px_rgba(15,23,42,0.9)] dark:bg-zinc-100 dark:text-zinc-950">
-              <Newspaper className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-strong text-lg font-semibold tracking-tight">
-                AI News Digest
-              </h2>
-              <p className="text-muted text-sm">
-                Daily AI briefing
-              </p>
-            </div>
+      <div
+        className="sticky top-0 flex max-h-[calc(100vh-2rem)] flex-col gap-5 overflow-hidden rounded-[12px] border p-5"
+        style={{
+          backgroundColor: "var(--ds-surface-1)",
+          borderColor: "var(--ds-border)",
+        }}
+      >
+        <div className="inline-flex items-center gap-3">
+          <span
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[10px]"
+            style={{ backgroundColor: "var(--ds-accent)" }}
+          >
+            <Newspaper className="h-5 w-5" style={{ color: "var(--ds-bg)" }} />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
+              AI News Digest
+            </h2>
+            <p className="text-sm" style={{ color: "var(--ds-text-dim)" }}>Daily AI briefing</p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <StatBlock
-            label="Stories"
-            value={loading ? "…" : articleCount}
-            detail="Today’s stack"
-          />
-          <StatBlock
+          <SidebarStat label="Stories" value={loading ? "…" : articleCount} detail="Today's stack" />
+          <SidebarStat
             label="Updated"
             value={mounted && generatedAt ? formatTime(generatedAt) : "…"}
             detail={mounted && generatedAt ? formatDateLabel(generatedAt) : "Regenerating"}
           />
         </div>
 
-        <nav className="space-y-2">
+        <nav className="space-y-1">
           {sidebarLinks.map((link) => {
             const active = pathname === link.href;
             return (
@@ -191,67 +196,73 @@ function DesktopSidebar({
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`group flex items-center rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                  active
-                    ? "bg-zinc-950 text-white shadow-[0_18px_36px_-24px_rgba(15,23,42,0.9)] dark:bg-zinc-100 dark:text-zinc-950"
-                    : "text-zinc-950 hover:-translate-y-0.5 hover:bg-white/90 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                }`}
+                className="group flex items-center rounded-[10px] px-3.5 py-2.5 text-sm font-medium transition-colors"
                 style={{
-                  borderColor: active ? "rgba(15,23,42,0.05)" : "var(--surface-border-white)",
-                  backgroundColor: active ? undefined : "var(--surface-card-bg)",
+                  color: active ? "var(--ds-accent)" : "var(--ds-text-muted)",
+                  backgroundColor: active ? "var(--ds-accent-soft)" : "transparent",
+                  boxShadow: active && typeof window !== "undefined" && document.documentElement.classList.contains("dark")
+                    ? "var(--ds-accent-glow)"
+                    : "none",
                 }}
               >
                 {link.label}
-                <ChevronRight className={`ml-auto h-4 w-4 transition ${active ? "opacity-80" : "opacity-35 group-hover:opacity-60"}`} />
+                <ChevronRight
+                  className="ml-auto h-4 w-4 transition-opacity"
+                  style={{ opacity: active ? 0.8 : 0.3 }}
+                />
               </Link>
             );
           })}
         </nav>
 
         <section
-          className="rounded-[1.4rem] border p-4"
+          className="rounded-[10px] border p-4"
           style={{
-            background: "var(--surface-soft-panel)",
-            borderColor: "var(--surface-border-white)",
+            backgroundColor: "var(--ds-surface-2)",
+            borderColor: "var(--ds-border)",
           }}
         >
-          <div className="text-panel-label flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.26em]">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+          <div
+            className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest"
+            style={{ color: "var(--ds-text-dim)" }}
+          >
+            <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--ds-accent)" }} />
             Personalization
           </div>
-          <dl className="mt-4 space-y-3 text-sm">
+          <dl className="mt-3 space-y-2.5 text-sm">
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">Topics covered</dt>
-              <dd className="text-strong font-medium">
+              <dt style={{ color: "var(--ds-text-dim)" }}>Topics covered</dt>
+              <dd className="font-medium" style={{ color: "var(--ds-text)" }}>
                 {personalization.topicsCovered}/{personalization.totalActiveTopics || 0}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">Signals active</dt>
-              <dd className="text-strong font-medium">
+              <dt style={{ color: "var(--ds-text-dim)" }}>Signals active</dt>
+              <dd className="font-medium" style={{ color: "var(--ds-text)" }}>
                 {personalization.activeSignals}
               </dd>
             </div>
           </dl>
-          {topics.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
+          {topics.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {topics.slice(0, 4).map((topic) => (
                 <span
                   key={topic}
-                  className="rounded-full border px-3 py-1 text-[11px] font-medium text-muted"
+                  className="rounded-full border px-2.5 py-0.5 text-[10px] font-medium"
                   style={{
-                    background: "rgba(56, 189, 248, 0.08)",
-                    borderColor: "rgba(56, 189, 248, 0.16)",
+                    backgroundColor: "var(--ds-surface-1)",
+                    borderColor: "var(--ds-border)",
+                    color: "var(--ds-text-dim)",
                   }}
                 >
                   {topic.replace(/_/g, " ")}
                 </span>
               ))}
             </div>
-          ) : null}
+          )}
         </section>
 
-        <div className="mt-auto border-t pt-4" style={{ borderColor: "var(--surface-border-subtle)" }}>
+        <div className="mt-auto pt-4" style={{ borderTop: "1px solid var(--ds-border)" }}>
           <ThemeToggle />
         </div>
       </div>
@@ -272,49 +283,53 @@ function MobileInsights({
 }) {
   return (
     <section className="lg:hidden">
-      <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)]">
+      <div
+        className="overflow-hidden rounded-[12px] border"
+        style={{
+          backgroundColor: "var(--ds-surface-1)",
+          borderColor: "var(--ds-border)",
+        }}
+      >
         <button
           type="button"
           onClick={onToggle}
           className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
         >
           <div>
-            <p className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.26em]">
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--ds-text-dim)" }}>
               Personalization
             </p>
-            <p className="text-muted mt-1 text-sm">
+            <p className="mt-1 text-sm" style={{ color: "var(--ds-text-muted)" }}>
               {personalization.topicsCovered} topics covered, {personalization.activeSignals} signals active
             </p>
           </div>
-          <ChevronDown className={`text-subtle h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+          <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} style={{ color: "var(--ds-text-dim)" }} />
         </button>
-        {open ? (
-          <div className="border-t px-5 py-4" style={{ borderColor: "var(--surface-border-subtle)" }}>
+        {open && (
+          <div className="border-t px-5 py-4" style={{ borderColor: "var(--ds-border)" }}>
             <div className="grid grid-cols-2 gap-3">
-              <StatBlock
-                label="Topics"
-                value={`${personalization.topicsCovered}/${personalization.totalActiveTopics || 0}`}
-              />
-              <StatBlock label="Signals" value={personalization.activeSignals} />
+              <SidebarStat label="Topics" value={`${personalization.topicsCovered}/${personalization.totalActiveTopics || 0}`} />
+              <SidebarStat label="Signals" value={personalization.activeSignals} />
             </div>
-            {topics.length > 0 ? (
+            {topics.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
                 {topics.slice(0, 5).map((topic) => (
                   <span
                     key={topic}
-                    className="text-muted rounded-full border px-3 py-1 text-[11px] font-medium"
+                    className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
                     style={{
-                      background: "rgba(56, 189, 248, 0.08)",
-                      borderColor: "rgba(56, 189, 248, 0.16)",
+                      backgroundColor: "var(--ds-surface-2)",
+                      borderColor: "var(--ds-border)",
+                      color: "var(--ds-text-dim)",
                     }}
                   >
                     {topic.replace(/_/g, " ")}
                   </span>
                 ))}
               </div>
-            ) : null}
+            )}
           </div>
-        ) : null}
+        )}
       </div>
     </section>
   );
@@ -322,14 +337,14 @@ function MobileInsights({
 
 function SkeletonCard() {
   return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)]">
-      <div className="h-48 animate-pulse bg-gradient-to-br from-zinc-200 via-zinc-100 to-white dark:from-zinc-700 dark:via-zinc-800 dark:to-zinc-900" />
+    <div className="overflow-hidden rounded-[12px] border" style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-1)" }}>
+      <div className="h-48 animate-pulse" style={{ backgroundColor: "var(--ds-surface-2)" }} />
       <div className="space-y-4 p-5">
-        <div className="h-4 w-24 animate-pulse rounded-full bg-zinc-200/90 dark:bg-zinc-700/90" />
-        <div className="h-8 w-4/5 animate-pulse rounded-2xl bg-zinc-200/90 dark:bg-zinc-700/90" />
+        <div className="h-4 w-24 animate-pulse rounded-full" style={{ backgroundColor: "var(--ds-surface-2)" }} />
+        <div className="h-8 w-4/5 animate-pulse rounded-lg" style={{ backgroundColor: "var(--ds-surface-2)" }} />
         <div className="space-y-2">
-          <div className="h-4 w-full animate-pulse rounded-full bg-zinc-200/75 dark:bg-zinc-700/75" />
-          <div className="h-4 w-5/6 animate-pulse rounded-full bg-zinc-200/75 dark:bg-zinc-700/75" />
+          <div className="h-4 w-full animate-pulse rounded-lg" style={{ backgroundColor: "var(--ds-surface-2)" }} />
+          <div className="h-4 w-5/6 animate-pulse rounded-lg" style={{ backgroundColor: "var(--ds-surface-2)" }} />
         </div>
       </div>
     </div>
@@ -349,19 +364,23 @@ function BriefProgressCard({
 
   if (isFailed) {
     return (
-      <section className="rounded-[var(--radius-card)] border border-rose-200 bg-rose-50 p-8 text-center shadow-[var(--shadow-soft)] dark:border-rose-900/40 dark:bg-rose-950/20">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400">
+      <section className="rounded-[12px] border p-8 text-center" style={{ borderColor: "rgba(239,68,68,0.25)", backgroundColor: "var(--ds-surface-1)" }}>
+        <div
+          className="mx-auto flex h-14 w-14 items-center justify-center rounded-full"
+          style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}
+        >
           <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h2 className="text-strong mt-4 text-2xl font-semibold tracking-tight">
+        <h2 className="font-display mt-4 text-2xl font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
           {progress.message}
         </h2>
         <button
           type="button"
           onClick={onRefresh}
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+          className="mt-6 inline-flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-sm font-semibold transition-colors"
+          style={{ backgroundColor: "var(--ds-accent)", color: "var(--ds-bg)" }}
         >
           Try again
           <ArrowUpRight className="h-4 w-4" />
@@ -371,29 +390,30 @@ function BriefProgressCard({
   }
 
   return (
-    <section className="rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] p-6 shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)] sm:p-8">
+    <section className="rounded-[12px] border p-6 sm:p-8" style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-1)" }}>
       {/* Spinner + headline */}
       <div className="text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
-          <svg className="h-7 w-7 animate-spin" fill="none" viewBox="0 0 24 24">
+        <div
+          className="mx-auto flex h-14 w-14 items-center justify-center rounded-full"
+          style={{ backgroundColor: "var(--ds-accent)" }}
+        >
+          <svg className="h-7 w-7 animate-spin" fill="none" viewBox="0 0 24 24" style={{ color: "var(--ds-bg)" }}>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         </div>
-        <h2 className="text-strong mt-4 text-xl font-semibold tracking-tight">
+        <h2 className="mt-4 text-xl font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
           {progress.message}
         </h2>
 
-        {/* Step indicator */}
         {progress.totalSteps > 0 && (
-          <p className="text-muted mt-2 text-sm">
+          <p className="mt-2 text-sm" style={{ color: "var(--ds-text-muted)" }}>
             Step {progress.step} of {progress.totalSteps}
           </p>
         )}
 
-        {/* Sub-status for writing summaries phase */}
         {isWritingSummaries && progress.itemsTotal > 0 && (
-          <p className="text-muted mt-1 text-xs">
+          <p className="mt-1 text-xs" style={{ color: "var(--ds-text-dim)" }}>
             {progress.itemsCompleted} of {progress.itemsTotal} summaries written
           </p>
         )}
@@ -409,13 +429,15 @@ function BriefProgressCard({
           return (
             <div
               key={phase}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${
-                isCurrent
-                  ? "bg-sky-50/80 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300"
+              className="flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm"
+              style={{
+                color: isCurrent
+                  ? "var(--ds-accent)"
                   : isComplete
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-zinc-400"
-              }`}
+                    ? "#22c55e"
+                    : "var(--ds-text-dim)",
+                backgroundColor: isCurrent ? "var(--ds-accent-soft)" : "transparent",
+              }}
             >
               {isComplete ? (
                 <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -427,7 +449,7 @@ function BriefProgressCard({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               ) : (
-                <span className="h-4 w-4 shrink-0 text-zinc-300">
+                <span className="h-4 w-4 shrink-0" style={{ color: "var(--ds-text-dim)" }}>
                   <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <circle cx="12" cy="12" r="6" />
                   </svg>
@@ -444,7 +466,7 @@ function BriefProgressCard({
         <button
           type="button"
           onClick={onRefresh}
-          className="text-muted inline-flex items-center gap-1 rounded-full border border-[var(--surface-border-white)] bg-[var(--surface-card-bg)] px-4 py-2 text-xs font-medium transition hover:bg-white/80"
+          className="ds-btn-secondary inline-flex items-center gap-1 text-xs"
         >
           Refresh now
           <ArrowUpRight className="h-3.5 w-3.5" />
@@ -456,22 +478,26 @@ function BriefProgressCard({
 
 function FeedErrorCard({ onRetry }: { onRetry: () => void }) {
   return (
-    <section className="rounded-[var(--radius-card)] border border-rose-200 bg-rose-50 p-8 text-center shadow-[var(--shadow-soft)] dark:border-rose-900/40 dark:bg-rose-950/20">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400">
+    <section className="rounded-[12px] border p-8 text-center" style={{ borderColor: "rgba(239,68,68,0.25)", backgroundColor: "var(--ds-surface-1)" }}>
+      <div
+        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full"
+        style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}
+      >
         <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </div>
-      <h2 className="text-strong mt-4 text-2xl font-semibold tracking-tight">
+      <h2 className="font-display mt-4 text-2xl font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
         We couldn&apos;t load your briefing
       </h2>
-      <p className="text-muted mx-auto mt-3 max-w-xl text-sm leading-relaxed">
+      <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
         The feed is temporarily unavailable. We&apos;ll keep trying in the background.
       </p>
       <button
         type="button"
         onClick={onRetry}
-        className="mt-6 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+        className="mt-6 inline-flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-sm font-semibold"
+        style={{ backgroundColor: "var(--ds-accent)", color: "var(--ds-bg)" }}
       >
         Try again
         <ArrowUpRight className="h-4 w-4" />
@@ -488,30 +514,25 @@ function ConsentPrompt({
   onAccept: () => void;
 }) {
   return (
-    <section className="rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] p-8 shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)]">
+    <section className="rounded-[12px] border p-8" style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-1)" }}>
       <div className="text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
-          <Settings2 className="h-6 w-6" />
+        <div
+          className="mx-auto flex h-14 w-14 items-center justify-center rounded-[10px]"
+          style={{ backgroundColor: "var(--ds-surface-2)" }}
+        >
+          <Settings2 className="h-6 w-6" style={{ color: "var(--ds-accent)" }} />
         </div>
-        <h2 className="text-strong mt-4 text-2xl font-semibold tracking-tight">
+        <h2 className="font-display mt-4 text-2xl font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
           Updated Privacy Policy &amp; Terms
         </h2>
-        <p className="text-muted mx-auto mt-3 max-w-xl text-sm leading-relaxed">
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
           Please review the latest policy and terms before continuing to your briefing.
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/privacy"
-            className="text-muted rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-white/80"
-            style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}
-          >
+          <Link href="/privacy" className="ds-btn-secondary">
             Privacy
           </Link>
-          <Link
-            href="/terms"
-            className="text-muted rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-white/80"
-            style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}
-          >
+          <Link href="/terms" className="ds-btn-secondary">
             Terms
           </Link>
         </div>
@@ -519,7 +540,7 @@ function ConsentPrompt({
           type="button"
           onClick={onAccept}
           disabled={acceptingConsent}
-          className="mt-6 inline-flex items-center justify-center rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+          className="mt-6 ds-btn justify-center"
         >
           {acceptingConsent ? "Accepting…" : "I Agree & Continue"}
         </button>
@@ -536,23 +557,29 @@ function ReadingHistory({
   readToday: number;
 }) {
   return (
-    <section className="rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] p-5 shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)]">
+    <section className="rounded-[12px] border p-5" style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-1)" }}>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.26em]">
+          <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--ds-text-dim)" }}>
             Reading activity
           </p>
-          <h2 className="text-strong mt-1 text-xl font-semibold tracking-tight">
+          <h2 className="font-display mt-1 text-xl font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
             Recently researched
           </h2>
         </div>
-        <div className="text-muted rounded-full border px-3 py-1 text-xs font-medium" style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}>
+        <div
+          className="rounded-full border px-3 py-1 text-xs font-medium"
+          style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-2)", color: "var(--ds-text-muted)" }}
+        >
           {readToday} read today
         </div>
       </div>
 
       {items.length === 0 ? (
-        <div className="text-muted mt-5 rounded-[1.25rem] border border-dashed p-6 text-sm" style={{ borderColor: "var(--surface-status-dashed)", backgroundColor: "var(--surface-status-bg)" }}>
+        <div
+          className="mt-5 rounded-[10px] border border-dashed p-6 text-sm"
+          style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-2)", color: "var(--ds-text-dim)" }}
+        >
           Engage with stories to build a visible reading history.
         </div>
       ) : (
@@ -560,33 +587,37 @@ function ReadingHistory({
           {items.map((item, index) => (
             <div
               key={`${item.title}-${index}`}
-              className="flex items-start gap-3 rounded-[1.25rem] border p-4"
-              style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}
+              className="flex items-start gap-3 rounded-[10px] border p-4"
+              style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-2)" }}
             >
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
-                <BookOpen className="h-4 w-4" />
+              <div
+                className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+                style={{ backgroundColor: "var(--ds-accent)" }}
+              >
+                <BookOpen className="h-4 w-4" style={{ color: "var(--ds-bg)" }} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-strong font-medium">{item.title}</p>
-                <p className="text-muted mt-1 text-sm">{item.source}</p>
-                {item.matchedTopics.length > 0 ? (
+                <p className="font-medium" style={{ color: "var(--ds-text)" }}>{item.title}</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--ds-text-muted)" }}>{item.source}</p>
+                {item.matchedTopics.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {item.matchedTopics.slice(0, 3).map((topic) => (
                       <span
                         key={topic}
-                        className="text-muted rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                        className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
                         style={{
-                          background: "rgba(56, 189, 248, 0.08)",
-                          borderColor: "rgba(56, 189, 248, 0.16)",
+                          backgroundColor: "var(--ds-surface-1)",
+                          borderColor: "var(--ds-border)",
+                          color: "var(--ds-text-dim)",
                         }}
                       >
                         {topic.replace(/_/g, " ")}
                       </span>
                     ))}
                   </div>
-                ) : null}
+                )}
               </div>
-              <div className="text-subtle shrink-0 text-xs">
+              <div className="shrink-0 text-xs" style={{ color: "var(--ds-text-dim)" }}>
                 {new Date(item.readAt).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
@@ -613,19 +644,12 @@ function ArticleCard({
 }) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
-  // Reset local feedback state when a replacement article is swapped in.
-  // The parent must use a key that changes when the article changes (e.g.
-  // `article.brief_item_id-${article.id}`). React will unmount/remount the
-  // component, naturally clearing `feedback` state.
-
   const handleFeedback = useCallback(
     (type: "thumbs_up" | "thumbs_down") => {
       setFeedback(type === "thumbs_up" ? "up" : "down");
       if (type === "thumbs_down") {
-        // Delegate to parent for possible card replacement
         onDownvote?.(article);
       } else {
-        // Thumbs-up is optimistic fire-and-forget
         fetch("/api/feedback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -641,18 +665,10 @@ function ArticleCard({
   );
 
   const accent = fallbackGradients[index % fallbackGradients.length];
-  const decorTile = decorTiles[index % decorTiles.length];
   const trustedImage = isProbablyArticleImageUrl(article.image_url) ? article.image_url : null;
   const imageStyle = trustedImage
-    ? {
-        backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.04), rgba(15,23,42,0.2)), url("${trustedImage}")`,
-      }
-    : {
-        backgroundImage: `${accent}, url("${decorTile}")`,
-        backgroundSize: "cover, 30%",
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center, center",
-      };
+    ? { backgroundImage: `url("${trustedImage}")`, backgroundSize: "cover", backgroundPosition: "center" }
+    : { backgroundImage: accent, backgroundSize: "cover" };
   const safariInfluence = article.provenance?.safari_history_import;
   const safariInfluenceTopics = safariInfluence?.top_topics
     .map((item) => humanizeSafariTopic(item.topic))
@@ -663,131 +679,135 @@ function ArticleCard({
       : "Influenced by Safari history";
 
   return (
-    <article className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-panel-blur)]">
-      <div
-        data-testid={trustedImage ? "article-image" : "article-image-fallback"}
-        className="relative h-[190px] border-b sm:h-[220px] lg:h-[240px]"
-        style={{
-          ...imageStyle,
-          borderColor: "var(--surface-border-subtle)",
-          backgroundPosition: trustedImage ? "center" : "center, center",
-          backgroundSize: trustedImage ? "cover" : "cover, 30%",
-        }}
-      >
-        {!trustedImage ? (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,_rgba(255,255,255,0.26),_transparent_24%),radial-gradient(circle_at_80%_20%,_rgba(255,255,255,0.12),_transparent_22%)]" />
-        ) : null}
-      </div>
+    <article className="overflow-hidden rounded-[12px] border" style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-1)" }}>
+      {trustedImage ? (
+        <div
+          className="relative h-[190px] border-b sm:h-[220px] lg:h-[240px]"
+          style={{ ...imageStyle, borderColor: "var(--ds-border)", backgroundImage: `url("${trustedImage}")`, backgroundSize: "cover", backgroundPosition: "center" }}
+        />
+      ) : (
+        <div
+          className="relative h-[190px] border-b sm:h-[220px] lg:h-[240px]"
+          style={{ ...imageStyle, borderColor: "var(--ds-border)" }}
+        />
+      )}
 
       <div className="space-y-5 p-5 sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className="text-panel-label rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
-            style={{ backgroundColor: "var(--surface-card-bg)", border: "1px solid var(--surface-border-white)" }}
+            className="rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest"
+            style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-2)", color: "var(--ds-text-muted)" }}
           >
             {article.source_name}
           </span>
-          <span className="rounded-full bg-zinc-950 px-3 py-1 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-950">
+          <span
+            className="rounded-full px-3 py-1 text-xs font-semibold"
+            style={{ backgroundColor: "var(--ds-accent)", color: "var(--ds-bg)" }}
+          >
             #{article.rank}
           </span>
-          {article.published_at && mounted ? (
-            <span className="text-muted inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium" style={{ backgroundColor: "var(--surface-status-bg)", border: "1px solid var(--surface-border-white)" }}>
+          {article.published_at && mounted && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium"
+              style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-2)", color: "var(--ds-text-muted)" }}
+            >
               <Clock className="h-3.5 w-3.5" />
               {formatTime(article.published_at)}
             </span>
-          ) : null}
+          )}
         </div>
 
         <div>
-          <h2 className="text-strong editorial-line-clamp-2 text-2xl font-semibold tracking-tight">
+          <h2 className="font-display text-[clamp(1.25rem,2vw,1.5rem)] font-semibold leading-[1.25] tracking-tight" style={{ color: "var(--ds-text)" }}>
             {article.title}
           </h2>
-          {article.summary ? (
-            <p className="text-muted editorial-line-clamp-4 mt-3 text-[15px] leading-7">
+          {article.summary && (
+            <p className="editorial-line-clamp-4 mt-3 text-sm leading-7" style={{ color: "var(--ds-text-muted)" }}>
               {article.summary}
             </p>
-          ) : null}
+          )}
         </div>
 
-        {article.why_recommended ? (
+        {article.why_recommended && (
           <div
-            className="rounded-[1.25rem] border p-4"
+            className="rounded-[10px] border p-4"
             style={{
-              background: "rgba(56, 189, 248, 0.08)",
-              borderColor: "rgba(56, 189, 248, 0.16)",
+              backgroundColor: "var(--ds-accent-soft)",
+              borderColor: "var(--ds-accent)",
             }}
           >
-            <p className="text-accent-panel text-[11px] font-semibold uppercase tracking-[0.24em]">
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--ds-accent)" }}>
               Why this made the brief
             </p>
-            <p className="text-accent-panel editorial-line-clamp-3 mt-2 text-sm leading-6">
+            <p className="editorial-line-clamp-3 mt-2 text-sm leading-6" style={{ color: "var(--ds-accent)", opacity: 0.85 }}>
               {article.why_recommended}
             </p>
-            {safariInfluence?.contributed ? (
+            {safariInfluence?.contributed && (
               <div
-                className="mt-3 rounded-[1rem] border px-3 py-2"
+                className="mt-3 rounded-[10px] border px-3 py-2"
                 style={{
-                  backgroundColor: "rgba(56, 189, 248, 0.08)",
-                  borderColor: "rgba(56, 189, 248, 0.16)",
+                  backgroundColor: "var(--ds-surface-1)",
+                  borderColor: "var(--ds-border)",
                 }}
               >
-                <p className="text-accent-panel text-[11px] font-semibold uppercase tracking-[0.24em]">
+                <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--ds-text-dim)" }}>
                   Safari history
                 </p>
-                <p className="text-accent-panel mt-1 text-sm leading-6">
+                <p className="mt-1 text-sm leading-6" style={{ color: "var(--ds-text-muted)" }}>
                   {safariInfluenceLabel}
                 </p>
               </div>
-            ) : null}
+            )}
           </div>
-        ) : null}
+        )}
 
-        {article.matched_signals?.length ? (
+        {article.matched_signals?.length && (
           <div className="flex flex-wrap gap-2">
             {article.matched_signals.slice(0, 5).map((signal) => (
               <span
                 key={signal}
-                className="text-muted rounded-full border px-3 py-1 text-[11px] font-medium"
+                className="rounded-full border px-3 py-1 text-[11px] font-medium"
                 style={{
-                  background: "var(--surface-card-bg)",
-                  borderColor: "var(--surface-border-white)",
+                  backgroundColor: "var(--ds-surface-2)",
+                  borderColor: "var(--ds-border)",
+                  color: "var(--ds-text-dim)",
                 }}
               >
                 {signal.replace(/_/g, " ")}
               </span>
             ))}
           </div>
-        ) : null}
+        )}
 
-        <div className="flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--surface-border-subtle)" }}>
+        <div className="flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderTop: "1px solid var(--ds-border)" }}>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => handleFeedback("thumbs_up")}
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
-                feedback === "up"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-900/50 dark:bg-emerald-900/30 dark:text-emerald-400"
-                  : "text-subtle hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600 dark:text-zinc-400 dark:hover:border-emerald-900/50 dark:hover:bg-emerald-900/20"
-              }`}
-              style={feedback !== "up" ? { borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" } : undefined}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors"
+              style={{
+                borderColor: feedback === "up" ? "rgba(34,197,94,0.35)" : "var(--ds-border)",
+                backgroundColor: feedback === "up" ? "rgba(34,197,94,0.1)" : "var(--ds-surface-2)",
+                color: feedback === "up" ? "#22c55e" : "var(--ds-text-muted)",
+              }}
               aria-label="Thumbs up"
               aria-pressed={feedback === "up"}
             >
-              <ThumbsUp className="h-4.5 w-4.5" />
+              <ThumbsUp className="h-4 w-4" />
             </button>
             <button
               type="button"
               onClick={() => handleFeedback("thumbs_down")}
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
-                feedback === "down"
-                  ? "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900/50 dark:bg-rose-900/30 dark:text-rose-400"
-                  : "text-subtle hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:text-zinc-400 dark:hover:border-rose-900/50 dark:hover:bg-rose-900/20"
-              }`}
-              style={feedback !== "down" ? { borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" } : undefined}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors"
+              style={{
+                borderColor: feedback === "down" ? "rgba(239,68,68,0.35)" : "var(--ds-border)",
+                backgroundColor: feedback === "down" ? "rgba(239,68,68,0.1)" : "var(--ds-surface-2)",
+                color: feedback === "down" ? "#ef4444" : "var(--ds-text-muted)",
+              }}
               aria-label="Thumbs down"
               aria-pressed={feedback === "down"}
             >
-              <ThumbsDown className="h-4.5 w-4.5" />
+              <ThumbsDown className="h-4 w-4" />
             </button>
           </div>
 
@@ -795,7 +815,7 @@ function ArticleCard({
             href={article.canonical_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+            className="ds-btn"
           >
             Read original
             <ArrowUpRight className="h-4 w-4" />
@@ -825,7 +845,6 @@ export default function FeedPage() {
     recentReading: [],
   });
   const { isDark, toggleDark, loading: themeLoading } = useTheme();
-  // Hydration guard — prevents React #418 mismatch from time-dependent SSR text.
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -860,7 +879,6 @@ export default function FeedPage() {
           if (mounted) {
             setProgressState(data);
             setFeedError(false);
-            // Keep any existing cached articles on screen during regeneration.
           }
           return { ok: false };
         }
@@ -875,11 +893,10 @@ export default function FeedPage() {
           return { ok: false };
         }
 
-        // 5xx or other unexpected response — explicit error state
         if (res.status >= 500 && mounted) {
           setFeedError(true);
           setProgressState(null);
-            setLoading(false);
+          setLoading(false);
         }
 
         return { ok: false };
@@ -887,7 +904,7 @@ export default function FeedPage() {
         if (mounted) {
           setFeedError(true);
           setProgressState(null);
-            setLoading(false);
+          setLoading(false);
         }
         return { ok: false };
       }
@@ -897,9 +914,9 @@ export default function FeedPage() {
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
         timer = undefined;
-        if (!mounted || failed) return; // stop on failure or unmount
+        if (!mounted || failed) return;
         const { ok } = await fetchBrief();
-        if (ok) return; // brief loaded, polling stops
+        if (ok) return;
         if (failed) return;
         const elapsed = Date.now() - start;
         const nextMs = elapsed >= 60_000 ? 8000 : 3000;
@@ -910,7 +927,6 @@ export default function FeedPage() {
     const pollStart = Date.now();
 
     async function load() {
-      // Step 1: Check consent
       try {
         const consentRes = await fetch("/api/settings/consent");
         if (consentRes.ok) {
@@ -923,7 +939,6 @@ export default function FeedPage() {
         }
       } catch {}
 
-      // Step 2: Show cached brief immediately if available
       const cached = getCachedBrief();
       if (cached && cached.articles.length > 0) {
         setArticles(cached.articles);
@@ -931,7 +946,6 @@ export default function FeedPage() {
         setLoading(false);
       }
 
-      // Step 3: Fetch (and keep polling if not ready)
       const { ok } = await fetchBrief();
       if (!ok && mounted) {
         setLoading(false);
@@ -948,7 +962,6 @@ export default function FeedPage() {
     };
   }, []);
 
-  // Refresh trigger — re-fetches /api/feed and updates progress + articles.
   const handleRefresh = useCallback(() => {
     setProgressState(null);
     setFeedError(false);
@@ -1038,8 +1051,6 @@ export default function FeedPage() {
 
   const hasArticles = Array.isArray(articles) && articles.length > 0;
 
-  // -- Downvote handler: POST /api/feedback and swap the card if replaced --
-
   const handleDownvote = useCallback(
     async (disliked: FeedArticleData) => {
       try {
@@ -1085,7 +1096,7 @@ export default function FeedPage() {
           }
         }
       } catch {
-        // Silently fail — the feedback event was still recorded server-side
+        // Silently fail
       }
     },
     []
@@ -1106,9 +1117,16 @@ export default function FeedPage() {
         />
       }
     >
-      <header className="flex items-center justify-between rounded-[var(--radius-card)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] px-5 py-4 shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-panel-blur)] lg:hidden">
-        <Link href="/feed" className="inline-flex items-center gap-2 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-          <Sparkles className="h-5 w-5 text-sky-500" />
+      {/* ── Mobile header ───────────────────────────────── */}
+      <header
+        className="flex items-center justify-between rounded-[12px] border px-5 py-4 lg:hidden"
+        style={{
+          backgroundColor: "var(--ds-surface-1)",
+          borderColor: "var(--ds-border)",
+        }}
+      >
+        <Link href="/feed" className="inline-flex items-center gap-2 text-base font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
+          <Sparkles className="h-5 w-5" style={{ color: "var(--ds-accent)" }} />
           AI News Digest
         </Link>
         <div className="flex items-center gap-2">
@@ -1116,33 +1134,35 @@ export default function FeedPage() {
             type="button"
             onClick={toggleDark}
             disabled={themeLoading}
-            className="text-muted inline-flex h-9 w-9 items-center justify-center rounded-full border transition hover:bg-white/80"
-            style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}
+            className="ds-btn-secondary h-9 w-9 px-0 justify-center disabled:opacity-50"
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           >
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-          <Link
-            href="/settings"
-            className="text-muted inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:bg-white/80"
-            style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}
-          >
+          <Link href="/settings" className="ds-btn-secondary">
             <Settings2 className="h-4 w-4" />
             Settings
           </Link>
         </div>
       </header>
 
-      <section className="rounded-[var(--radius-card)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] px-5 py-5 shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-panel-blur)] sm:px-6">
+      {/* ── Greeting hero ───────────────────────────────── */}
+      <section
+        className="rounded-[12px] border px-5 py-5 sm:px-6"
+        style={{
+          backgroundColor: "var(--ds-surface-1)",
+          borderColor: "var(--ds-border)",
+        }}
+      >
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-muted text-sm">
-              {mounted ? getGreeting() : "Welcome back"}, {displayName || "there"}
+            <p className="font-body text-xs font-medium uppercase tracking-widest" style={{ color: "var(--ds-text-dim)" }}>
+              {mounted ? getGreeting() : "Welcome back"}{displayName ? `, ${displayName}` : ""}
             </p>
-            <h1 className="text-strong mt-1 text-[clamp(1.8rem,3vw,2.35rem)] font-semibold tracking-tight">
+            <h1 className="font-display mt-2 text-[clamp(1.5rem,2.8vw,2rem)] font-semibold leading-[1.2] tracking-tight" style={{ color: "var(--ds-text)" }}>
               Your daily curated briefing
             </h1>
-            <p className="text-muted mt-2 inline-flex items-center gap-1.5 text-sm">
+            <p className="mt-2 inline-flex items-center gap-1.5 text-sm" style={{ color: "var(--ds-text-muted)" }}>
               <Clock className="h-4 w-4" />
               {mounted && generatedAt
                 ? `Updated ${formatTime(generatedAt)} · ${formatDateLabel(generatedAt)}`
@@ -1153,19 +1173,21 @@ export default function FeedPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-[1.15rem] border px-4 py-3 text-right" style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}>
-              <div className="text-panel-label text-[11px] font-semibold uppercase tracking-[0.24em]">
+            <div
+              className="rounded-[10px] border px-4 py-3 text-right"
+              style={{ backgroundColor: "var(--ds-surface-2)", borderColor: "var(--ds-border)" }}
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--ds-text-dim)" }}>
                 Stories
               </div>
-              <div className="text-strong mt-1 text-2xl font-semibold tracking-tight">
+              <div className="mt-1 text-2xl font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
                 {hasArticles ? articles.length : 0}
               </div>
             </div>
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="text-muted inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:-translate-y-0.5 hover:bg-white/80"
-              style={{ borderColor: "var(--surface-border-white)", backgroundColor: "var(--surface-card-bg)" }}
+              className="ds-btn-secondary"
             >
               Refresh
               <ArrowUpRight className="h-4 w-4" />
@@ -1216,12 +1238,12 @@ export default function FeedPage() {
           {articles.map((article, index) => (
             <ArticleCard key={`${article.brief_item_id}-${article.id}`} article={article} index={index} onDownvote={handleDownvote} mounted={mounted} />
           ))}
-          {mounted ? (
+          {mounted && (
             <ReadingHistory
               items={personalization.recentReading}
               readToday={personalization.articlesReadToday}
             />
-          ) : null}
+          )}
         </div>
       ) : (
         <BriefProgressCard

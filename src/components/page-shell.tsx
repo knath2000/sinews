@@ -17,53 +17,14 @@ export function PageShell({
 }: PageShellProps) {
   return (
     <div className="relative min-h-screen overflow-hidden lg:h-screen lg:overflow-hidden">
-      {/* Background field — layered, asymmetric, editorial */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {/* Main drift pools */}
-        <div
-          className="motion-ambient absolute left-[-10rem] top-[-6rem] h-[30rem] w-[30rem] rounded-full blur-3xl"
-          style={{
-            background:
-              "radial-gradient(circle, var(--ambient-apricot) 0%, rgba(244,114,182,0.04) 40%, transparent 70%)",
-          }}
-        />
-        <div
-          className="motion-ambient absolute right-[-12rem] top-16 h-[34rem] w-[34rem] rounded-full blur-3xl"
-          style={{
-            background:
-              "radial-gradient(circle, var(--ambient-sky) 0%, rgba(96,165,250,0.03) 42%, transparent 70%)",
-            animationDelay: "3s",
-          }}
-        />
-        {/* Lower accent pool */}
-        <div
-          className="motion-ambient absolute bottom-[-8rem] left-[30%] h-[26rem] w-[26rem] rounded-full blur-[128px]"
-          style={{
-            background:
-              "radial-gradient(circle, var(--ambient-lime) 0%, transparent 60%)",
-            animationDelay: "7s",
-          }}
-        />
-        {/* Subtle radial wash from top */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--ambient-top-wash),_transparent_45%)] opacity-15" />
-        {/* CSS-only noise-like grain overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.018]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")`,
-            backgroundSize: "200px 200px",
-          }}
-        />
-      </div>
-
       <div
-        className={`relative mx-auto grid min-h-screen w-full max-w-7xl gap-6 px-4 py-4 sm:px-6 lg:h-[calc(100vh-2rem)] lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden lg:px-8 ${shellClassName}`}
+        className={`relative mx-auto grid min-h-screen w-full max-w-7xl gap-5 px-4 py-4 sm:px-6 lg:h-[calc(100vh-2rem)] lg:grid-cols-[270px_minmax(0,1fr)] lg:overflow-hidden lg:px-8 ${shellClassName}`}
       >
         <aside className="lg:h-full lg:self-start">{sidebar}</aside>
 
-        <main className="space-y-6 pb-10 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:pb-0">
+        <main className="space-y-5 pb-10 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:pb-0">
           <div
-            className={`space-y-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2 lg:pb-4 ${contentClassName}`}
+            className={`space-y-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2 lg:pb-4 ${contentClassName}`}
           >
             {children}
           </div>
@@ -73,11 +34,10 @@ export function PageShell({
   );
 }
 
-// ── Surface Tiers ───────────────────────────────────────────────────
+// ── Surfaces ──────────────────────────────────────────────────────
 
 /**
- * ShellHero — premium, most dimensional surface.
- * Used for page hero / primary content blocks that need visual dominance.
+ * ShellHero — primary page surface.
  */
 export function ShellHero({
   children,
@@ -88,17 +48,19 @@ export function ShellHero({
 }) {
   return (
     <section
-      className={`relative overflow-hidden rounded-[var(--radius-hero)] border border-[var(--glass-hero-border)] bg-[var(--glass-hero-bg)] shadow-[var(--shadow-hero)] backdrop-blur-[var(--glass-hero-blur)] ${className}`}
+      className={`rounded-[12px] border px-6 py-6 sm:px-8 sm:py-7 ${className}`}
+      style={{
+        backgroundColor: "var(--ds-surface-1)",
+        borderColor: "var(--ds-border)",
+      }}
     >
-      <div className="absolute inset-0 bg-gradient-to-tr from-sky-50/40 via-transparent to-transparent" />
-      <div className="relative">{children}</div>
+      {children}
     </section>
   );
 }
 
 /**
- * ShellCard — standard glass-panel surface.
- * Replacement for previous ShellCard usage — now uses token system.
+ * ShellCard — standard panel surface.
  */
 export function ShellCard({
   children,
@@ -109,7 +71,11 @@ export function ShellCard({
 }) {
   return (
     <section
-      className={`relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-bg)] shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-panel-blur)] ${className}`}
+      className={`rounded-[12px] border ${className}`}
+      style={{
+        backgroundColor: "var(--ds-surface-1)",
+        borderColor: "var(--ds-border)",
+      }}
     >
       {children}
     </section>
@@ -117,8 +83,7 @@ export function ShellCard({
 }
 
 /**
- * ShellSoftCard — translucent secondary surface.
- * For groupings, sub-sections, or decorative blocks.
+ * ShellSoftCard — secondary panel surface.
  */
 export function ShellSoftCard({
   children,
@@ -129,18 +94,13 @@ export function ShellSoftCard({
   className?: string;
   tint?: "none" | "sky" | "apricot" | "lime" | "berry";
 }) {
-  const tintClasses: Record<string, string> = {
-    none: "",
-    sky: "bg-gradient-to-br from-sky-50/40 via-transparent to-transparent",
-    apricot: "bg-gradient-to-br from-orange-50/40 via-transparent to-transparent",
-    lime: "bg-gradient-to-br from-lime-50/40 via-transparent to-transparent",
-    berry: "bg-gradient-to-br from-pink-50/40 via-transparent to-transparent",
-
-  };
-
   return (
     <section
-      className={`relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--glass-soft-border)] bg-[var(--glass-soft-bg)] shadow-[var(--shadow-soft)] backdrop-blur-[var(--glass-soft-blur)] ${tintClasses[tint] ?? ""} ${className}`}
+      className={`rounded-[12px] border ${className}`}
+      style={{
+        backgroundColor: "var(--ds-surface-2)",
+        borderColor: "var(--ds-border)",
+      }}
     >
       {children}
     </section>
