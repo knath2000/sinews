@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -39,3 +40,13 @@ yarn-error.log*
 # typescript
 **/*.tsbuildinfo
 /apps/web/next-env.d.ts
+
+# mobile
+/.expo/
+**/.expo/
+/apps/mobile/.expo/
+/apps/mobile/.DS_Store
+/apps/mobile/ios/
+/apps/mobile/android/
+/apps/mobile/.idea/
+/apps/mobile/.vscode/

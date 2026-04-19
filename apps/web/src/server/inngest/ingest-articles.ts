@@ -85,10 +85,16 @@ export const ingestArticles = inngest.createFunction(
       };
     });
 
-    // Step 4: Trigger annotation events for newly inserted articles
-    // (We emit a single event for the ingestion batch)
-    await step.run("log-result", async () => {
-      console.log("Ingestion complete:", insertResult);
+    // Step 4: Trigger the annotation sweep once ingestion is finished.
+    await step.sendEvent("trigger-annotation-sweep", {
+      name: "article.ingestion-complete",
+      data: {
+        api_count: apiArticles.count,
+        rss_count: rssArticles.count,
+        total: insertResult.total,
+        unique: insertResult.unique,
+        inserted: insertResult.inserted,
+      },
     });
 
     return {

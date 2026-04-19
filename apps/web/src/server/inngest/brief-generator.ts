@@ -18,7 +18,9 @@ export const batchAnnotateArticles = inngest.createFunction(
       { event: "admin.resync.annotations" }, // Manual admin trigger
     ],
   },
-  async ({ step }) => {
+  async ({ step, event }) => {
+    console.log(`[ANNOTATION] Triggered by ${event.name}`);
+
     // 1. Diagnostics: Log raw counts to the Inngest Output tab
     const stats = await step.run("check-database-stats", async () => {
       const totalArticles = await db.articles.count();
@@ -142,4 +144,3 @@ export const generateAllDailyBriefs = inngest.createFunction(
     };
   }
 );
-
