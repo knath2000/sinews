@@ -77,25 +77,23 @@ export async function GET() {
       summary = buildSafariImportSummary({
         acceptedCount: latest.accepted_count ?? 0,
         topics: topicGroups
-          .filter((row) => row.normalized_topic)
-          .map(
-            (row) =>
-              ({
-                label: row.normalized_topic as string,
-                count: row._count._all,
-                weight: Number(row._sum.weight ?? BigInt(0)),
-              }) as const,
-          ),
+          .filter(
+            (row: { normalized_topic: string | null; _count: { _all: number }; _sum: { weight: number | null } }) => row.normalized_topic !== null,
+          )
+          .map((row: { normalized_topic: string | null; _count: { _all: number }; _sum: { weight: number | null } }) => ({
+            label: row.normalized_topic as string,
+            count: row._count._all,
+            weight: row._sum.weight ?? 0,
+          })),
         domains: domainGroups
-          .filter((row) => row.raw_value)
-          .map(
-            (row) =>
-              ({
-                label: row.raw_value as string,
-                count: row._count._all,
-                weight: Number(row._sum.weight ?? BigInt(0)),
-              }) as const,
-          ),
+          .filter(
+            (row: { raw_value: string | null; _count: { _all: number }; _sum: { weight: number | null } }) => row.raw_value !== null,
+          )
+          .map((row: { raw_value: string | null; _count: { _all: number }; _sum: { weight: number | null } }) => ({
+            label: row.raw_value as string,
+            count: row._count._all,
+            weight: row._sum.weight ?? 0,
+          })),
       });
     }
 
