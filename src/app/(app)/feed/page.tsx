@@ -741,7 +741,7 @@ function ArticleCard({
         </div>
 
         <div>
-          {article.tldr && (
+          {!article.is_paywalled && article.tldr && (
             <p className="mb-2 text-sm font-semibold leading-6" style={{ color: "var(--ds-accent)" }}>
               TL;DR: {article.tldr}
             </p>
@@ -749,14 +749,35 @@ function ArticleCard({
           <h2 className="font-display text-[clamp(1.25rem,2vw,1.5rem)] font-semibold leading-[1.25] tracking-tight" style={{ color: "var(--ds-text)" }}>
             {article.title}
           </h2>
-          {article.summary && (
-            <p className="editorial-line-clamp-4 mt-3 text-sm leading-7" style={{ color: "var(--ds-text-muted)" }}>
-              {article.summary}
-            </p>
+
+          {article.is_paywalled ? (
+            <div className="relative mt-4 overflow-hidden rounded-[10px] border p-5" style={{ borderColor: "var(--ds-border)", backgroundColor: "var(--ds-surface-2)" }}>
+              <div className="pointer-events-none select-none opacity-30 blur-[4px]">
+                <p className="mb-2 text-sm font-semibold leading-6" style={{ color: "var(--ds-accent)" }}>
+                  TL;DR: Placeholder summary awaiting upgrade
+                </p>
+                <p className="text-sm leading-7" style={{ color: "var(--ds-text-muted)" }}>
+                  After upgrading, AI-generated summaries will appear here, extracting key points,
+                  entities, and the core takeaway so you don't need to read the full article.
+                </p>
+              </div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-[var(--ds-surface-2)]/80 to-transparent">
+                <span className="mb-3 text-sm font-bold tracking-wide" style={{ color: "var(--ds-text)" }}>Premium AI Summary Locked</span>
+                <Link href="/settings" className="inline-flex h-9 items-center justify-center rounded-[10px] px-4 text-sm font-medium transition-colors" style={{ backgroundColor: "var(--ds-accent)", color: "var(--ds-bg)" }}>
+                  Upgrade to Premium
+                </Link>
+              </div>
+            </div>
+          ) : (
+            article.summary && (
+              <p className="editorial-line-clamp-4 mt-3 text-sm leading-7" style={{ color: "var(--ds-text-muted)" }}>
+                {article.summary}
+              </p>
+            )
           )}
         </div>
 
-        {article.why_recommended && (
+        {article.why_recommended && !article.is_paywalled && (
           <div
             className="rounded-[10px] border p-4"
             style={{

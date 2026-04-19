@@ -17,6 +17,7 @@ export interface FeedArticleData {
   rank: number;
   score: number;
   brief_item_id: number;
+  is_paywalled?: boolean;
 }
 
 export interface FeedPayload {
@@ -117,6 +118,7 @@ export interface FeedReplacementArticle {
   rank: number;
   score: number;
   brief_item_id: number;
+  is_paywalled?: boolean;
 }
 
 /** Response shape from POST /api/feedback. */

@@ -21,9 +21,31 @@ export async function GET(request: NextRequest) {
     if ("status" in auth) return auth;
     const { dbUser } = auth;
 
+    const profile = await (async () => {
+      const { db } = await import("@/server/db/client");
+      return db.user_profiles.findUnique({
+        where: { user_id: dbUser.id },
+        select: { subscription_tier: true },
+      });
+    })();
+    const isPremium = profile?.subscription_tier === "premium";
+
     const brief = await loadTodaysBrief(dbUser.id);
 
     if (brief) {
+      if (!isPremium) {
+        const sanitizedArticles = brief.articles.map((article) => ({
+          ...article,
+          summary: null,
+          tldr: null,
+          why_recommended: null,
+          is_paywalled: true,
+        }));
+        return NextResponse.json({
+          articles: sanitizedArticles,
+          generatedAt: brief.generatedAt?.toISOString() ?? null,
+        });
+      }
       return NextResponse.json({
         articles: brief.articles,
         generatedAt: brief.generatedAt?.toISOString() ?? null,
