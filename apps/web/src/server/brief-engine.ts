@@ -72,6 +72,26 @@ export interface GeneratedBriefItem {
   why_recommended: string;
 }
 
+type CandidateAnnotationRow = {
+  article: {
+    id: number;
+    title: string;
+    source_name: string;
+    canonical_url: string;
+    published_at: Date | null;
+    cluster_id: string | null;
+    provider: string;
+    license_class: string | null;
+    is_fixture: boolean;
+  };
+  topics_json: string | null;
+  entities_json: string | null;
+  quality_score: number | null;
+  dedupe_key: string | null;
+  summary: string | null;
+  tldr: string | null;
+};
+
 /**
  * Calculate user interest signals weights for topics and entities.
  * Builds a weighted profile from interest_signals, user_topic_preferences,
@@ -489,7 +509,7 @@ export async function getCandidates(
   }>
 > {
   const poolSize = Math.max(limit * 20, 200);
-  const annotated = await db.article_annotations.findMany({
+  const annotated: CandidateAnnotationRow[] = await db.article_annotations.findMany({
     where: {
       article: {
         published_at: { gte: since },
@@ -516,22 +536,22 @@ export async function getCandidates(
   });
 
   const candidates = annotated.map((a) => ({
-      article_id: a.article.id,
-      title: sanitizeFeedTitle(a.article.title) ?? (a.article.title.trim() || "Untitled"),
-      source_name: a.article.source_name,
-      canonical_url: a.article.canonical_url,
-      published_at: a.article.published_at,
-      topics: a.topics_json ? JSON.parse(a.topics_json) : [],
-      entities: a.entities_json ? JSON.parse(a.entities_json) : [],
-      quality_score: a.quality_score ?? 3,
-      dedupe_key: a.dedupe_key ?? "",
-      cluster_id: a.article.cluster_id,
-      cached_summary: a.summary ?? null,
-      cached_tldr: a.tldr ?? null,
-      provider: a.article.provider,
-      license_class: a.article.license_class,
-      is_fixture: a.article.is_fixture,
-    }));
+    article_id: a.article.id,
+    title: sanitizeFeedTitle(a.article.title) ?? (a.article.title.trim() || "Untitled"),
+    source_name: a.article.source_name,
+    canonical_url: a.article.canonical_url,
+    published_at: a.article.published_at,
+    topics: a.topics_json ? JSON.parse(a.topics_json) : [],
+    entities: a.entities_json ? JSON.parse(a.entities_json) : [],
+    quality_score: a.quality_score ?? 3,
+    dedupe_key: a.dedupe_key ?? "",
+    cluster_id: a.article.cluster_id,
+    cached_summary: a.summary ?? null,
+    cached_tldr: a.tldr ?? null,
+    provider: a.article.provider,
+    license_class: a.article.license_class,
+    is_fixture: a.article.is_fixture,
+  }));
 
   return candidates
     .filter((candidate) => !isFixtureArticle(candidate))
