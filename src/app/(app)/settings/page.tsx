@@ -11,10 +11,12 @@ import {
   Sparkles,
   Trash2,
   Wifi,
+  ArrowUpRight,
   X as XIcon,
   User,
   Edit3,
   Check,
+  CreditCard,
 } from "lucide-react";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 import { TIMEZONES } from "@/lib/constants";
@@ -61,6 +63,10 @@ export default function SettingsPage({
   const [briefHour, setBriefHour] = useState(4);
   const [showAllTopics, setShowAllTopics] = useState(false);
   const [activeSection, setActiveSection] = useState("#your-profile");
+
+  // Billing
+  const [billingRedirecting, setBillingRedirecting] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
   // Feedback history
   interface FeedbackItem {
@@ -384,6 +390,7 @@ export default function SettingsPage({
     { href: "#appearance", label: "Appearance" },
     { href: "#safari-history-import", label: "Safari import" },
     { href: "#linked-accounts", label: "Accounts" },
+    { href: "#manage-billing", label: "Billing" },
     { href: "#brief-delivery-time", label: "Brief time" },
     { href: "#topic-preferences", label: "Topics" },
     { href: "#feedback-history", label: "Feedback History" },
@@ -411,6 +418,24 @@ export default function SettingsPage({
       // ignore
     }
     window.location.href = "/login";
+  }
+
+  async function handleOpenBillingPortal() {
+    setBillingRedirecting(true);
+    setBillingError(null);
+    try {
+      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+      } else {
+        setBillingError(data.error ?? "Unable to open billing portal");
+        setBillingRedirecting(false);
+      }
+    } catch {
+      setBillingError("Network error. Please try again.");
+      setBillingRedirecting(false);
+    }
   }
 
   return (
@@ -699,6 +724,43 @@ export default function SettingsPage({
               label="Microsoft"
               description="Not yet supported &mdash; coming soon"
             />
+          </div>
+        </ShellCard>
+      </section>
+
+      {/* ── Manage Billing ─────────────────────────── */}
+      <section id="manage-billing" className="scroll-mt-8">
+        <ShellCard className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
+              Manage Billing
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
+              Update your payment method, view invoices, and manage your subscription on Stripe.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleOpenBillingPortal}
+              disabled={billingRedirecting}
+              className="ds-btn"
+            >
+              {billingRedirecting ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current opacity-30 border-t-current" />
+                  Redirecting…
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-4 w-4" />
+                  Open Billing Portal
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </>
+              )}
+            </button>
+            {billingError && (
+              <p className="text-sm" style={{ color: "#ef4444" }}>{billingError}</p>
+            )}
           </div>
         </ShellCard>
       </section>

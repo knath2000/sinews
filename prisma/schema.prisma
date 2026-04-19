@@ -33,6 +33,9 @@ model user_profiles {
   last_active_at           DateTime @default(now()) @db.Timestamptz
   is_admin                 Boolean  @default(false)
   dark_mode                Boolean  @default(false)
+  subscription_tier        String   @default("free") @db.Text
+  stripe_customer_id       String?  @unique @db.Text
+  stripe_subscription_id   String?  @unique @db.Text
 
   user users @relation(fields: [user_id], references: [id])
 
