@@ -24,6 +24,10 @@ const CACHE_TTL_MS = 30_000;
 // Guard so we only run seeding once per process lifetime.
 let seeded = false;
 
+type FeatureFlagKeyRow = {
+  flag_key: FlagKey;
+};
+
 /**
  * Ensure every known flag key has a row in the database.
  * Called once on first invocation of `isFeatureEnabled`.
@@ -32,14 +36,15 @@ async function seedFlags(): Promise<void> {
   if (seeded) return;
   seeded = true;
 
-  const entries = await db.feature_flags.findMany({
+  const entries: FeatureFlagKeyRow[] = await db.feature_flags.findMany({
     select: { flag_key: true },
-  });
+  }) as FeatureFlagKeyRow[];
   const existing = new Set(entries.map((e) => e.flag_key));
 
   const missing: { flag_key: string; enabled: boolean }[] = [];
 
-  for (const [key, defaultValue] of Object.entries(FLAG_KEYS)) {
+  const flagEntries = Object.entries(FLAG_KEYS) as [FlagKey, boolean][];
+  for (const [key, defaultValue] of flagEntries) {
     if (!existing.has(key)) {
       missing.push({ flag_key: key, enabled: defaultValue });
     }

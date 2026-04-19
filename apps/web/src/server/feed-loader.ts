@@ -33,6 +33,67 @@ interface FeedArticle {
   user_feedback: "thumbs_up" | "thumbs_down" | null;
 }
 
+type FeedbackEventRow = {
+  daily_brief_item_id: number;
+  event_type: string;
+};
+
+type UserTopicPreferenceRow = {
+  topic: string;
+  weight: number;
+  source: string;
+};
+
+type LoadedBriefArticleRow = {
+  id: number;
+  title: string;
+  source_name: string;
+  canonical_url: string;
+  image_url: string | null;
+  published_at: Date | null;
+  provider: string;
+  license_class: string | null;
+  is_fixture: boolean;
+  article_annotations: {
+    topics_json: string | null;
+    entities_json: string | null;
+  } | null;
+};
+
+type LoadedBriefItemRow = {
+  id: number;
+  rank: number;
+  score: number;
+  summary: string | null;
+  tldr: string | null;
+  why_recommended: string | null;
+  provenance_json: string | null;
+  article: LoadedBriefArticleRow | null;
+};
+
+type LoadedBriefRow = {
+  id: number;
+  status: string;
+  generated_at: Date | null;
+  daily_brief_items: LoadedBriefItemRow[];
+};
+
+type ReplacementBriefItemRow = {
+  id: number;
+  article_id: number | null;
+  rank: number;
+};
+
+type ReplacementBriefRow = {
+  id: number;
+  status: string;
+  daily_brief_items: ReplacementBriefItemRow[];
+};
+
+type ReplacementBriefLookupRow = {
+  daily_brief: ReplacementBriefRow | null;
+};
+
 /** Shape returned to the API for a single replacement article. */
 export interface FeedReplacementResult {
   id: number;
@@ -82,7 +143,7 @@ export async function loadTodaysBrief(userId: string): Promise<{
         },
       },
     },
-  });
+  }) as LoadedBriefRow | null;
 
   if (!brief) {
     return null;
@@ -97,12 +158,12 @@ export async function loadTodaysBrief(userId: string): Promise<{
   }
 
   const itemIds = brief.daily_brief_items.map((i) => i.id);
-  const feedbacks = await db.feedback_events.findMany({
+  const feedbacks: FeedbackEventRow[] = await db.feedback_events.findMany({
     where: {
       user_id: userId,
       daily_brief_item_id: { in: itemIds },
     },
-  });
+  }) as FeedbackEventRow[];
   const feedbackMap = new Map(feedbacks.map((f) => [f.daily_brief_item_id, f.event_type]));
 
   const articlesWithSource = brief.daily_brief_items
@@ -218,11 +279,11 @@ function deriveMatchedSignals(
 /**
  * Loads all topic preferences for a user.
  */
-export async function loadUserTopics(userId: string) {
-  const prefs = await db.user_topic_preferences.findMany({
+export async function loadUserTopics(userId: string): Promise<UserTopicPreferenceRow[]> {
+  const prefs: UserTopicPreferenceRow[] = await db.user_topic_preferences.findMany({
     where: { user_id: userId },
     select: { topic: true, weight: true, source: true },
-  });
+  }) as UserTopicPreferenceRow[];
   return prefs;
 }
 
@@ -377,7 +438,7 @@ export async function findReplacementArticle(
         },
       },
     },
-  });
+  }) as ReplacementBriefLookupRow | null;
   const brief = briefItem?.daily_brief;
   if (!brief || brief.status !== "completed") return null;
 
