@@ -76,6 +76,7 @@ function parseFeedArticleData(value: unknown): FeedArticleData | null {
     rank: article.rank,
     score: article.score,
     brief_item_id: article.brief_item_id,
+    is_paywalled: typeof article.is_paywalled === 'boolean' ? article.is_paywalled : undefined,
   };
 }
 
@@ -171,5 +172,6 @@ export function parseReplacementArticle(value: unknown): FeedReplacementArticle 
     rank: a.rank,
     score: a.score,
     brief_item_id: a.brief_item_id,
+    is_paywalled: typeof a.is_paywalled === 'boolean' ? a.is_paywalled : undefined,
   };
 }
