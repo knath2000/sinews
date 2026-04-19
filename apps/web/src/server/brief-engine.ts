@@ -515,23 +515,41 @@ export async function getCandidates(
     take: poolSize,
   });
 
-  const candidates = annotated.map((a) => ({
-    article_id: a.article.id,
-    title: sanitizeFeedTitle(a.article.title) ?? (a.article.title.trim() || "Untitled"),
-    source_name: a.article.source_name,
-    canonical_url: a.article.canonical_url,
-    published_at: a.article.published_at,
-    topics: a.topics_json ? JSON.parse(a.topics_json) : [],
-    entities: a.entities_json ? JSON.parse(a.entities_json) : [],
-    quality_score: a.quality_score ?? 3,
-    dedupe_key: a.dedupe_key ?? "",
-    cluster_id: a.article.cluster_id,
-    cached_summary: a.summary ?? null,
-    cached_tldr: a.tldr ?? null,
-    provider: a.article.provider,
-    license_class: a.article.license_class,
-    is_fixture: a.article.is_fixture,
-  }));
+  const candidates = annotated.map(
+    (a: Prisma.article_annotationsGetPayload<{
+      include: {
+        article: {
+          select: {
+            id: true;
+            title: true;
+            source_name: true;
+            canonical_url: true;
+            published_at: true;
+            cluster_id: true;
+            provider: true;
+            license_class: true;
+            is_fixture: true;
+          };
+        };
+      };
+    }>) => ({
+      article_id: a.article.id,
+      title: sanitizeFeedTitle(a.article.title) ?? (a.article.title.trim() || "Untitled"),
+      source_name: a.article.source_name,
+      canonical_url: a.article.canonical_url,
+      published_at: a.article.published_at,
+      topics: a.topics_json ? JSON.parse(a.topics_json) : [],
+      entities: a.entities_json ? JSON.parse(a.entities_json) : [],
+      quality_score: a.quality_score ?? 3,
+      dedupe_key: a.dedupe_key ?? "",
+      cluster_id: a.article.cluster_id,
+      cached_summary: a.summary ?? null,
+      cached_tldr: a.tldr ?? null,
+      provider: a.article.provider,
+      license_class: a.article.license_class,
+      is_fixture: a.article.is_fixture,
+    }),
+  );
 
   return candidates
     .filter((candidate) => !isFixtureArticle(candidate))
