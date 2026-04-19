@@ -26,7 +26,18 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      users: users.map((u) => ({
+      users: users.map((u: {
+        id: string;
+        email: string;
+        timezone: string;
+        created_at: Date;
+        user_profiles: {
+          onboarding_complete: boolean;
+          is_admin: boolean;
+          brief_ready_hour_local: number;
+          last_active_at: Date;
+        } | null;
+      }) => ({
         id: u.id,
         email: u.email,
         timezone: u.timezone,

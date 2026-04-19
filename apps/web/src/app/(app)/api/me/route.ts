@@ -32,11 +32,11 @@ export async function GET() {
       },
       profile: dbUser.profile,
       isAdmin: dbUser.isAdmin,
-      topicPreferences: topicPreferences.map((p) => ({
+      topicPreferences: topicPreferences.map((p: { topic: string; weight: number }) => ({
         topic: p.topic,
         weight: p.weight,
       })),
-      linkedAccounts: linkedAccounts.map((a) => ({
+      linkedAccounts: linkedAccounts.map((a: { provider: string; status: string }) => ({
         provider: a.provider,
         status: a.status,
       })),

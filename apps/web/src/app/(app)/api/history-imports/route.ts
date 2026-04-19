@@ -78,18 +78,24 @@ export async function GET() {
         acceptedCount: latest.accepted_count ?? 0,
         topics: topicGroups
           .filter((row) => row.normalized_topic)
-          .map((row) => ({
-            label: row.normalized_topic as string,
-            count: row._count._all,
-            weight: row._sum.weight ?? 0,
-          })),
+          .map(
+            (row) =>
+              ({
+                label: row.normalized_topic as string,
+                count: row._count._all,
+                weight: Number(row._sum.weight ?? BigInt(0)),
+              }) as const,
+          ),
         domains: domainGroups
           .filter((row) => row.raw_value)
-          .map((row) => ({
-            label: row.raw_value as string,
-            count: row._count._all,
-            weight: row._sum.weight ?? 0,
-          })),
+          .map(
+            (row) =>
+              ({
+                label: row.raw_value as string,
+                count: row._count._all,
+                weight: Number(row._sum.weight ?? BigInt(0)),
+              }) as const,
+          ),
       });
     }
 

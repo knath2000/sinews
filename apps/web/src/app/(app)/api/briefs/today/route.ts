@@ -61,7 +61,21 @@ export async function GET(request: NextRequest) {
           id: existingBrief.id,
           status: existingBrief.status,
           generatedAt: existingBrief.generated_at,
-          items: existingBrief.daily_brief_items.map((item) => ({
+          items: existingBrief.daily_brief_items.map((item: {
+            rank: number;
+            score: number;
+            summary: string | null;
+            why_recommended: string | null;
+            article: {
+              id: number;
+              title: string;
+              source_name: string;
+              canonical_url: string;
+              snippet: string | null;
+              published_at: Date | null;
+              image_url: string | null;
+            } | null;
+          }) => ({
             rank: item.rank,
             score: item.score,
             summary: sanitizeFeedSnippet(item.summary),
