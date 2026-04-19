@@ -15,6 +15,7 @@ import { buildBriefItemProvenance } from "@/lib/safari-insights";
 import { updateBriefProgress as updateBriefProgressDb } from "@/lib/brief-progress-db";
 import { PHASE_MESSAGES } from "@/lib/brief-progress";
 import { getTodayBriefDate, getYesterdayBriefDate, getYesterdayBriefDateForUser, getTodayBriefDateForUser } from "@/lib/brief-date";
+import { getCurrentArticleCutoff } from "./article-archive";
 
 // Re-export for backwards compat through feed-loader re-exports.
 const updateBriefProgress = updateBriefProgressDb;
@@ -238,6 +239,11 @@ export async function getYesterdayBriefTopics(userId: string): Promise<Set<strin
               },
             },
           },
+          archived_article: {
+            select: {
+              topics_json: true,
+            },
+          },
         },
       },
     },
@@ -247,10 +253,10 @@ export async function getYesterdayBriefTopics(userId: string): Promise<Set<strin
   if (!brief) return topics;
 
   for (const item of brief.daily_brief_items) {
-    const annot = item.article?.article_annotations;
-    if (annot?.topics_json) {
+    const topicsJson = item.article?.article_annotations?.topics_json ?? item.archived_article?.topics_json;
+    if (topicsJson) {
       try {
-        const parsed = JSON.parse(annot.topics_json) as string[];
+        const parsed = JSON.parse(topicsJson) as string[];
         if (Array.isArray(parsed)) {
           for (const t of parsed) {
             if (typeof t === "string") topics.add(t);
@@ -488,7 +494,7 @@ export async function filterBySourcePolicy(
 
 /**
  * Get annotated articles for brief candidates.
- * Requires articles to have annotations.
+ * Requires articles to have annotations and be published on the current UTC day.
  */
 export async function getCandidates(
   since: Date,
@@ -723,13 +729,13 @@ export async function generateDailyBriefForUser(
     // Fetch yesterday's brief topics for novelty bonus
     const yesterdayBriefTopics = await getYesterdayBriefTopics(userId);
 
-    // Get candidates from last 24 hours
-    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    // Get candidates from the current UTC day
+    const since = getCurrentArticleCutoff(now);
     let candidates = await getCandidates(since, 50);
 
     // No annotated articles available — run a mini ingestion + annotation pipeline
     if (candidates.length === 0) {
-      await bootstrapLiveArticlesForNewUser();
+      await bootstrapLiveArticlesForNewUser(since);
       candidates = await getCandidates(since, 50);
     }
 
@@ -988,7 +994,7 @@ export async function generateDailyBriefForUser(
  * needed: 50 articles max from RSS feeds (skipping TheNewsAPI since it
  * requires a separate API key).
  */
-async function bootstrapLiveArticlesForNewUser(): Promise<number> {
+async function bootstrapLiveArticlesForNewUser(cutoff: Date): Promise<number> {
   const rawArticles = await fetchAllRSSFeeds();
   if (rawArticles.length === 0) {
     logError(
@@ -1000,14 +1006,25 @@ async function bootstrapLiveArticlesForNewUser(): Promise<number> {
   }
 
   // Limit to 50 fresh articles
-  const batch: RawArticle[] = rawArticles.slice(0, 50);
+  const batch: RawArticle[] = rawArticles
+    .filter((article) => article.published_at ? article.published_at >= cutoff : false)
+    .slice(0, 50);
 
   // Insert articles
-  const existingUrls = await db.articles.findMany({
-    where: { canonical_url: { in: batch.map((a) => a.canonical_url) } },
-    select: { canonical_url: true },
-  }) as ExistingArticleUrlRow[];
-  const existingUrlSet = new Set(existingUrls.map((e) => e.canonical_url));
+  const [existingUrls, archivedUrls] = await Promise.all([
+    db.articles.findMany({
+      where: { canonical_url: { in: batch.map((a) => a.canonical_url) } },
+      select: { canonical_url: true },
+    }) as Promise<ExistingArticleUrlRow[]>,
+    db.archived_articles.findMany({
+      where: { canonical_url: { in: batch.map((a) => a.canonical_url) } },
+      select: { canonical_url: true },
+    }) as Promise<ExistingArticleUrlRow[]>,
+  ]);
+  const existingUrlSet = new Set([
+    ...existingUrls.map((e) => e.canonical_url),
+    ...archivedUrls.map((e) => e.canonical_url),
+  ]);
   const newArticles: RawArticle[] = batch.filter((a) => !existingUrlSet.has(a.canonical_url));
 
   for (const a of newArticles) {

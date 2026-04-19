@@ -33,6 +33,11 @@ export async function GET() {
                 article_annotations: true,
               },
             },
+            archived_article: {
+              select: {
+                topics_json: true,
+              },
+            },
           },
         },
       },
@@ -47,10 +52,10 @@ export async function GET() {
     const coveredTopics = new Set<string>();
     if (userBrief) {
       for (const item of userBrief.daily_brief_items) {
-        const annot = item.article?.article_annotations;
-        if (annot?.topics_json) {
+        const topicsJson = item.article?.article_annotations?.topics_json ?? item.archived_article?.topics_json;
+        if (topicsJson) {
           try {
-            const topics = JSON.parse(annot.topics_json) as string[];
+            const topics = JSON.parse(topicsJson) as string[];
             topics.forEach((t) => coveredTopics.add(t));
           } catch { /* skip */ }
         }
@@ -72,21 +77,22 @@ export async function GET() {
     // Recent reading history (last 7 days, thumbs_up as engagement proxy)
     const recentReading = await db.$queryRaw<
       Array<{
-        article_id: number;
-        title: string;
-        source_name: string;
+        article_id: number | null;
+        title: string | null;
+        source_name: string | null;
         topics_json: string | null;
         created_at: string;
       }>
     >`
       SELECT
-        a.id as article_id,
-        a.title,
-        a.source_name,
-        aa.topics_json,
+        COALESCE(a.id, ar.id) as article_id,
+        COALESCE(a.title, ar.title) as title,
+        COALESCE(a.source_name, ar.source_name) as source_name,
+        COALESCE(aa.topics_json, ar.topics_json) as topics_json,
         f.created_at::text as created_at
       FROM feedback_events f
-      JOIN articles a ON f.article_id = a.id
+      LEFT JOIN articles a ON f.article_id = a.id
+      LEFT JOIN archived_articles ar ON f.archived_article_id = ar.id
       LEFT JOIN article_annotations aa ON aa.article_id = a.id
       WHERE f.user_id = ${dbUser.id}::uuid
         AND f.created_at > ${sevenDaysAgo}
@@ -95,7 +101,7 @@ export async function GET() {
       LIMIT 5
     `;
 
-    const recentReadingParsed = recentReading.map((r: { article_id: number; title: string; source_name: string; topics_json: string | null; created_at: string }) => {
+    const recentReadingParsed = recentReading.map((r: { article_id: number | null; title: string | null; source_name: string | null; topics_json: string | null; created_at: string }) => {
       let topics: string[] = [];
       if (r.topics_json) {
         try {
@@ -104,8 +110,8 @@ export async function GET() {
       }
       return {
         articleId: r.article_id,
-        title: r.title,
-        source: r.source_name,
+        title: r.title ?? "Untitled",
+        source: r.source_name ?? "Unknown",
         matchedTopics: topics,
         readAt: r.created_at,
       };

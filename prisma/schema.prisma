@@ -120,6 +120,38 @@ model articles {
   @@map("articles")
 }
 
+model archived_articles {
+  id                 Int       @id
+  canonical_url      String    @db.Text
+  source_name        String    @db.Text
+  title              String    @db.Text
+  snippet            String?   @db.Text
+  published_at       DateTime? @db.Timestamptz
+  language           String    @default("en") @db.Text
+  provider           String    @db.Text
+  is_fixture         Boolean   @default(false)
+  license_class      String?   @db.Text
+  image_url          String?   @db.Text
+  cluster_id         String?   @db.Text
+  editorial_priority Int       @default(3)
+  blocked_reason     String?   @db.Text
+  created_at         DateTime  @db.Timestamptz
+  topics_json        String?   @db.Text
+  entities_json      String?   @db.Text
+  quality_score      Int?
+  dedupe_key         String?   @db.Text
+  summary            String?   @db.Text
+  tldr               String?   @db.Text
+  archived_at        DateTime  @default(now()) @db.Timestamptz
+
+  daily_brief_items daily_brief_items[]
+  feedback_events   feedback_events[]
+
+  @@index([published_at])
+  @@index([archived_at])
+  @@map("archived_articles")
+}
+
 model article_annotations {
   article_id    Int     @id
   topics_json   String? @db.Text
@@ -156,6 +188,7 @@ model daily_brief_items {
   id              Int     @id @default(autoincrement())
   daily_brief_id  Int
   article_id      Int?
+  archived_article_id Int?
   rank            Int
   score           Float
   summary         String? @db.Text
@@ -164,10 +197,12 @@ model daily_brief_items {
   provenance_json String? @db.Text
 
   daily_brief daily_briefs @relation(fields: [daily_brief_id], references: [id], onDelete: Cascade)
-  article     articles?    @relation(fields: [article_id], references: [id])
+  article     articles?    @relation(fields: [article_id], references: [id], onDelete: SetNull)
+  archived_article archived_articles? @relation(fields: [archived_article_id], references: [id], onDelete: SetNull)
 
   feedback_events feedback_events[]
 
+  @@index([archived_article_id])
   @@map("daily_brief_items")
 }
 
@@ -178,13 +213,16 @@ model feedback_events {
   event_type          String   @db.Text
   created_at          DateTime @default(now()) @db.Timestamptz
   article_id          Int?
+  archived_article_id Int?
   topic               String?  @db.Text
   entity              String?  @db.Text
 
   user             users             @relation(fields: [user_id], references: [id], onDelete: Cascade)
   daily_brief_item daily_brief_items @relation(fields: [daily_brief_item_id], references: [id], onDelete: Cascade)
-  article          articles?         @relation(fields: [article_id], references: [id], onDelete: Cascade)
+  article          articles?         @relation(fields: [article_id], references: [id], onDelete: SetNull)
+  archived_article archived_articles? @relation(fields: [archived_article_id], references: [id], onDelete: SetNull)
 
+  @@index([archived_article_id])
   @@map("feedback_events")
 }
 

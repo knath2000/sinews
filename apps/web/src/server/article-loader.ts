@@ -90,11 +90,17 @@ export interface RawArticle {
 export async function articleExists(
   canonicalUrl: string
 ): Promise<boolean> {
-  const existing = await db.articles.findFirst({
-    where: { canonical_url: canonicalUrl },
-    select: { id: true },
-  });
-  return existing !== null;
+  const [current, archived] = await Promise.all([
+    db.articles.findFirst({
+      where: { canonical_url: canonicalUrl },
+      select: { id: true },
+    }),
+    db.archived_articles.findFirst({
+      where: { canonical_url: canonicalUrl },
+      select: { id: true },
+    }),
+  ]);
+  return current !== null || archived !== null;
 }
 
 // Insert a batch of articles, skipping duplicates
@@ -104,11 +110,20 @@ export async function insertArticles(
   if (articles.length === 0) return 0;
 
   const urls = articles.map((a) => a.canonical_url);
-  const existing = await db.articles.findMany({
-    where: { canonical_url: { in: urls } },
-    select: { canonical_url: true },
-  });
-  const existingUrls = new Set(existing.map((e: { canonical_url: string }) => e.canonical_url));
+  const [existing, archived] = await Promise.all([
+    db.articles.findMany({
+      where: { canonical_url: { in: urls } },
+      select: { canonical_url: true },
+    }),
+    db.archived_articles.findMany({
+      where: { canonical_url: { in: urls } },
+      select: { canonical_url: true },
+    }),
+  ]);
+  const existingUrls = new Set([
+    ...existing.map((e: { canonical_url: string }) => e.canonical_url),
+    ...archived.map((e: { canonical_url: string }) => e.canonical_url),
+  ]);
   const newArticles = articles.filter(
     (a) => !existingUrls.has(a.canonical_url)
   );

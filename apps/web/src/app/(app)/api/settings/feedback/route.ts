@@ -19,11 +19,24 @@ export async function GET() {
             source_name: true,
           },
         },
+        archived_article: {
+          select: {
+            title: true,
+            published_at: true,
+            canonical_url: true,
+            source_name: true,
+          },
+        },
       },
       take: 50,
     });
 
-    return NextResponse.json({ feedback });
+    return NextResponse.json({
+      feedback: feedback.map(({ archived_article, ...item }) => ({
+        ...item,
+        article: item.article ?? archived_article,
+      })),
+    });
   } catch (error) {
     console.error("Failed to fetch feedback history:", error);
     return NextResponse.json({ error: "Failed to fetch feedback" }, { status: 500 });

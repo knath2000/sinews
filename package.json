@@ -24,6 +24,7 @@
     "db:clear": "tsx prisma/clear.ts",
     "db:verify": "tsx prisma/verify.ts",
     "reset:content": "tsx scripts/reset-derived-content.ts",
+    "archive:articles": "tsx scripts/archive-old-articles.ts",
     "backfill:article-text": "tsx scripts/backfill-article-text.ts",
     "backfill:thumbnails": "tsx scripts/backfill-thumbnail-images.ts",
     "backfill:titles": "tsx scripts/backfill-article-text.ts"

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { logError } from "../apps/web/src/server/error-logger";
 
@@ -31,6 +32,9 @@ async function cleanup() {
   // Delete annotations first (FK dependency on articles)
   await db.article_annotations.deleteMany({});
   console.log("  Cleaned up annotations");
+
+  await db.archived_articles.deleteMany({});
+  console.log("  Cleaned up archived articles");
   
   // Delete articles
   await db.articles.deleteMany({ where: { is_fixture: true } });

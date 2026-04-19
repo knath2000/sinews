@@ -2,6 +2,7 @@ import { inngest } from "./client";
 import { fetchFromTheNewsAPI, fetchAllRSSFeeds } from "../news-fetcher";
 import { insertArticles, RawArticle } from "../article-loader";
 import { logError } from "../error-logger";
+import { archiveOldArticles } from "../article-archive";
 
 /**
  * ingestArticles Job - Hourly
@@ -85,7 +86,13 @@ export const ingestArticles = inngest.createFunction(
       };
     });
 
-    // Step 4: Trigger the annotation sweep once ingestion is finished.
+    // Step 4: Move stale articles into the archive table so the live table
+    // only contains current-day articles.
+    const archiveResult = await step.run("archive-old-articles", async () => {
+      return await archiveOldArticles();
+    });
+
+    // Step 5: Trigger the annotation sweep once ingestion is finished.
     await step.sendEvent("trigger-annotation-sweep", {
       name: "article.ingestion-complete",
       data: {
@@ -94,6 +101,7 @@ export const ingestArticles = inngest.createFunction(
         total: insertResult.total,
         unique: insertResult.unique,
         inserted: insertResult.inserted,
+        archived: archiveResult.archived_articles,
       },
     });
 
@@ -102,6 +110,7 @@ export const ingestArticles = inngest.createFunction(
       api_count: apiArticles.count,
       rss_count: rssArticles.count,
       ...insertResult,
+      archived: archiveResult.archived_articles,
     };
   }
 );

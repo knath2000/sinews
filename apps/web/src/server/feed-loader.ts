@@ -10,6 +10,7 @@ import {
 import { parseBriefItemProvenance, buildBriefItemProvenance } from "@/lib/safari-insights";
 import { generateBriefItem } from "@/server/brief-engine";
 import { getTodayBriefDateForUser } from "@/lib/brief-date";
+import { getArticleSnapshotById, getCurrentArticleCutoff } from "./article-archive";
 
 /**
  * Types used by the feed page.
@@ -69,6 +70,19 @@ type LoadedBriefItemRow = {
   why_recommended: string | null;
   provenance_json: string | null;
   article: LoadedBriefArticleRow | null;
+  archived_article: {
+    id: number;
+    title: string;
+    source_name: string;
+    canonical_url: string;
+    image_url: string | null;
+    published_at: Date | null;
+    provider: string;
+    license_class: string | null;
+    is_fixture: boolean;
+    topics_json: string | null;
+    entities_json: string | null;
+  } | null;
 };
 
 type LoadedBriefRow = {
@@ -81,6 +95,7 @@ type LoadedBriefRow = {
 type ReplacementBriefItemRow = {
   id: number;
   article_id: number | null;
+  archived_article_id: number | null;
   rank: number;
 };
 
@@ -140,6 +155,21 @@ export async function loadTodaysBrief(userId: string): Promise<{
               article_annotations: true,
             },
           },
+          archived_article: {
+            select: {
+              id: true,
+              title: true,
+              source_name: true,
+              canonical_url: true,
+              image_url: true,
+              published_at: true,
+              provider: true,
+              license_class: true,
+              is_fixture: true,
+              topics_json: true,
+              entities_json: true,
+            },
+          },
         },
       },
     },
@@ -168,7 +198,7 @@ export async function loadTodaysBrief(userId: string): Promise<{
 
   const articlesWithSource = brief.daily_brief_items
     .map((item) => {
-      const article = item.article;
+      const article = item.article ?? item.archived_article;
       if (!article) return null;
 
       return {
@@ -189,12 +219,15 @@ export async function loadTodaysBrief(userId: string): Promise<{
             stripHtml: true,
             maxLength: 200,
           }),
-          matched_signals: article.article_annotations
+          matched_signals: "article_annotations" in article && article.article_annotations
             ? deriveMatchedSignals(
                 article.article_annotations.topics_json,
                 article.article_annotations.entities_json
               )
-            : null,
+            : deriveMatchedSignals(
+                item.archived_article?.topics_json ?? null,
+                item.archived_article?.entities_json ?? null
+              ),
           provenance: parseBriefItemProvenance(item.provenance_json),
           rank: item.rank,
           score: item.score,
@@ -204,7 +237,7 @@ export async function loadTodaysBrief(userId: string): Promise<{
       };
     })
     .filter(
-      (entry): entry is { article: NonNullable<typeof brief.daily_brief_items[number]["article"]>; feedArticle: FeedArticle } =>
+      (entry): entry is { article: NonNullable<typeof brief.daily_brief_items[number]["article"] | typeof brief.daily_brief_items[number]["archived_article"]>; feedArticle: FeedArticle } =>
         entry !== null
     );
 
@@ -333,27 +366,35 @@ export async function submitFeedbackAndSignals(
     // 2. Lookup the article's annotation via the brief item
     const briefItem = await tx.daily_brief_items.findUnique({
       where: { id: briefItemId },
-      include: {
-        article: {
-          include: { article_annotations: true },
-        },
+      select: {
+        id: true,
+        article_id: true,
+        archived_article_id: true,
       },
     });
 
     let topics: string[] = [];
     let entities: string[] = [];
 
-    if (briefItem?.article?.article_annotations) {
-      const a = briefItem.article.article_annotations;
+    const snapshot = await getArticleSnapshotById(
+      articleId ?? briefItem?.article_id ?? briefItem?.archived_article_id ?? 0
+    );
+    if (snapshot?.topics_json) {
       try {
-        if (a.topics_json) topics = JSON.parse(a.topics_json) as string[];
+        topics = JSON.parse(snapshot.topics_json) as string[];
       } catch { /* ignore */ }
+    }
+    if (snapshot?.entities_json) {
       try {
-        if (a.entities_json) entities = JSON.parse(a.entities_json) as string[];
+        entities = JSON.parse(snapshot.entities_json) as string[];
       } catch { /* ignore */ }
     }
 
-    const actualArticleId = articleId ?? briefItem?.article?.id ?? null;
+    const feedbackArticleData = snapshot
+      ? snapshot.isArchived
+        ? { archived_article_id: snapshot.id, article_id: null }
+        : { article_id: snapshot.id, archived_article_id: null }
+      : { article_id: null, archived_article_id: null };
 
     // 3. Delete ALL prior interest_signals derived from this brief item
     // (covers stale signals from a previously-replaced article in this slot)
@@ -371,7 +412,7 @@ export async function submitFeedbackAndSignals(
         user_id: userId,
         daily_brief_item_id: briefItemId,
         event_type: eventType,
-        article_id: actualArticleId,
+        ...feedbackArticleData,
       },
     });
 
@@ -445,50 +486,39 @@ export async function findReplacementArticle(
   const targetItem = brief.daily_brief_items.find((i) => i.id === briefItemId);
   if (!targetItem) return null;
 
-  const dislikedId = dislikedArticleId ?? targetItem.article_id;
+  const dislikedId = dislikedArticleId ?? targetItem.article_id ?? targetItem.archived_article_id;
   if (!dislikedId) return null;
 
   // Build sets to exclude
   const existingArticleIds = new Set<number>(
     brief.daily_brief_items
-      .map((i) => i.article_id)
+      .map((i) => i.article_id ?? i.archived_article_id)
       .filter((id): id is number => id !== null)
   );
 
   // Get the disliked article's annotation for exclusion
-  const dislikedArticle = await db.articles.findUnique({
-    where: { id: dislikedId },
-    include: { article_annotations: true },
-  });
+  const dislikedArticle = await getArticleSnapshotById(dislikedId);
   if (!dislikedArticle) return null;
-  const dislikedDedupeKey = dislikedArticle.article_annotations?.dedupe_key ?? null;
+  const dislikedDedupeKey = dislikedArticle.dedupe_key ?? null;
   const dislikedClusterId = dislikedArticle.cluster_id;
 
   // Gather dedupe/cluster keys from the 4 kept articles
   const keptItemIds = brief.daily_brief_items
-    .filter((i) => i.id !== briefItemId && i.article_id !== null)
-    .map((i) => i.article_id as number);
+    .filter((i) => i.id !== briefItemId && (i.article_id !== null || i.archived_article_id !== null))
+    .map((i) => (i.article_id ?? i.archived_article_id) as number);
   const keptDedupeKeys = new Set<string>();
   const keptClusterIds = new Set<string>();
   if (keptItemIds.length > 0) {
-    // Fetch annotations + cluster_ids for kept articles
-    const keptAnnots = await db.article_annotations.findMany({
-      where: { article: { id: { in: keptItemIds } } },
-    });
-    for (const ka of keptAnnots) {
-      if (ka.dedupe_key) keptDedupeKeys.add(ka.dedupe_key);
-    }
-    const keptArts = await db.articles.findMany({
-      where: { id: { in: keptItemIds } },
-      select: { cluster_id: true },
-    });
-    for (const a of keptArts) {
-      if (a.cluster_id) keptClusterIds.add(a.cluster_id);
+    const keptArticles = await Promise.all(keptItemIds.map((id) => getArticleSnapshotById(id)));
+    for (const article of keptArticles) {
+      if (!article) continue;
+      if (article.dedupe_key) keptDedupeKeys.add(article.dedupe_key);
+      if (article.cluster_id) keptClusterIds.add(article.cluster_id);
     }
   }
 
-  // Fetch candidate pool from the last 24 hours
-  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  // Fetch candidate pool from the current UTC day
+  const since = getCurrentArticleCutoff(now);
   let candidates = await getCandidates(since, 50);
   if (candidates.length === 0) return null;
 
@@ -515,10 +545,7 @@ export async function findReplacementArticle(
 
   // Take the top scorer
   const best = scored[0];
-  const article = await db.articles.findUnique({
-    where: { id: best.article_id },
-    select: { snippet: true, image_url: true, canonical_url: true },
-  });
+  const article = await getArticleSnapshotById(best.article_id);
   if (!article) return null;
 
   // Generate summary + why_recommended
