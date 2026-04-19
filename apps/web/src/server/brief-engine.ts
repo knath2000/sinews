@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { db } from "./db/client";
+import { Prisma } from "@prisma/client";
 import { SIGNAL_WEIGHTS } from "./taxonomy";
 import { isFeatureEnabled } from "./feature-flags";
 import { HISTORY_IMPORT_DOMAIN_WEIGHT_CAP } from "@/lib/constants";
@@ -884,7 +885,7 @@ export async function generateDailyBriefForUser(
     });
 
     // Update brief with items
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Delete existing items
       await tx.daily_brief_items.deleteMany({
         where: { daily_brief_id: brief.id },

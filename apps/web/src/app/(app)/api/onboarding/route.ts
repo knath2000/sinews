@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
+import { Prisma } from "@prisma/client";
 import { TOPIC_TAXONOMY } from "@/server/taxonomy";
 import { MIN_TOPIC_SELECTIONS, CURRENT_CONSENT_VERSION } from "@/lib/constants";
 import { logError } from "@/server/error-logger";
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     const uniqueTopics = [...new Set(topics.map((t: string) => t.toLowerCase()))];
 
     // Save topics and update profile in a transaction
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Upsert topic preferences
       await tx.user_topic_preferences.createMany({
         data: uniqueTopics.map((topic) => ({

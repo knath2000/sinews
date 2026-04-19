@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
+import { Prisma } from "@prisma/client";
 
 /**
  * GET /api/settings/profile — returns user's display name and timezone.
@@ -45,7 +46,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx: Prisma.TransactionClient) => {
     if (displayName.length > 0) {
       await tx.user_profiles.upsert({
         where: { user_id: dbUser.id },

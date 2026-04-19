@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 import { logError } from "@/server/error-logger";
+import { Prisma } from "@prisma/client";
 
 /**
  * POST /api/history-imports/[id]/confirm
@@ -66,7 +67,7 @@ export async function POST(
   }
 
   try {
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Delete all prior history_import signals for this user
       await tx.interest_signals.deleteMany({
         where: { user_id: dbUser.id, provider: "history_import" },

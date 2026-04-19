@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth-admin";
 import { db } from "@/server/db/client";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function DELETE(request: NextRequest) {
   if (isNaN(articleId)) return NextResponse.json({ error: "Invalid article ID" }, { status: 400 });
 
   try {
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // Clear annotation first (has FK with Cascade on article_annotations)
       await tx.article_annotations.deleteMany({
         where: { article_id: articleId },

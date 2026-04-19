@@ -1,4 +1,5 @@
 import { db } from "@/server/db/client";
+import { Prisma } from "@prisma/client";
 import { isFixtureArticle } from "@/server/fixture-utils";
 import { logError } from "@/server/error-logger";
 import {
@@ -258,7 +259,7 @@ export async function submitFeedbackAndSignals(
   const signalWeight = 1.0;
   const signalConfidence = 0.7;
 
-  await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx: Prisma.TransactionClient) => {
     // 1. Delete any prior feedback_events for this user + brief item
     await tx.feedback_events.deleteMany({
       where: {
@@ -491,7 +492,7 @@ export async function findReplacementArticle(
   });
 
   // Patch the brief item in place
-  await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.daily_brief_items.update({
       where: { id: briefItemId },
       data: {
