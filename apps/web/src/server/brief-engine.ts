@@ -515,24 +515,7 @@ export async function getCandidates(
     take: poolSize,
   });
 
-  const candidates = annotated.map(
-    (a: Prisma.article_annotationsGetPayload<{
-      include: {
-        article: {
-          select: {
-            id: true;
-            title: true;
-            source_name: true;
-            canonical_url: true;
-            published_at: true;
-            cluster_id: true;
-            provider: true;
-            license_class: true;
-            is_fixture: true;
-          };
-        };
-      };
-    }>) => ({
+  const candidates = annotated.map((a) => ({
       article_id: a.article.id,
       title: sanitizeFeedTitle(a.article.title) ?? (a.article.title.trim() || "Untitled"),
       source_name: a.article.source_name,
@@ -548,8 +531,7 @@ export async function getCandidates(
       provider: a.article.provider,
       license_class: a.article.license_class,
       is_fixture: a.article.is_fixture,
-    }),
-  );
+    }));
 
   return candidates
     .filter((candidate) => !isFixtureArticle(candidate))
