@@ -15,40 +15,48 @@ function getStripe() {
 }
 
 export async function POST() {
-  const auth = await requireAuth();
-  if (auth instanceof Response) return auth;
+  try {
+    const auth = await requireAuth();
+    if (auth instanceof Response) return auth;
 
-  const { dbUser } = auth;
+    const { dbUser } = auth;
 
-  const profile = await db.user_profiles.findUnique({
-    where: { user_id: dbUser.id },
-    select: { stripe_customer_id: true },
-  });
+    const profile = await db.user_profiles.findUnique({
+      where: { user_id: dbUser.id },
+      select: { stripe_customer_id: true },
+    });
 
-  const appUrl = process.env.APP_BASE_URL;
+    const appUrl = process.env.APP_BASE_URL;
 
-  const sessionParams: Stripe.Checkout.SessionCreateParams = {
-    payment_method_types: ["card"],
-    mode: "subscription",
-    client_reference_id: dbUser.id,
-    line_items: [
-      {
-        price: process.env.STRIPE_PREMIUM_PRICE_ID!,
-        quantity: 1,
-      },
-    ],
-    success_url: `${appUrl}/settings?upgrade=success`,
-    cancel_url: `${appUrl}/settings`,
-  };
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      payment_method_types: ["card"],
+      mode: "subscription",
+      client_reference_id: dbUser.id,
+      line_items: [
+        {
+          price: process.env.STRIPE_PREMIUM_PRICE_ID!,
+          quantity: 1,
+        },
+      ],
+      success_url: `${appUrl}/settings?upgrade=success`,
+      cancel_url: `${appUrl}/settings`,
+    };
 
-  if (profile?.stripe_customer_id) {
-    sessionParams.customer = profile.stripe_customer_id;
-  } else {
-    sessionParams.customer_email = dbUser.email;
+    if (profile?.stripe_customer_id) {
+      sessionParams.customer = profile.stripe_customer_id;
+    } else {
+      sessionParams.customer_email = dbUser.email;
+    }
+
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    return NextResponse.json({ url: session.url });
+  } catch (error) {
+    console.error("[STRIPE_CHECKOUT_ERROR]", error);
+    return NextResponse.json(
+      { error: "Failed to generate checkout link" },
+      { status: 500 }
+    );
   }
-
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.create(sessionParams);
-
-  return NextResponse.json({ url: session.url });
 }
