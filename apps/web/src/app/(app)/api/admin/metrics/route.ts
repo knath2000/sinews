@@ -81,31 +81,41 @@ export async function GET() {
       briefsOverview.find((b: { status: string, _count: number, _avg: { generation_duration_ms: number | null } }) => b.status === "completed" || b.status === "success")?._avg?.generation_duration_ms;
 
     return NextResponse.json({
-      ingestionStats: articlesBySource.map((row) => ({
-        source: row.source_name,
-        provider: row.provider,
-        count: row._count,
-      })),
-      ingestionStatsToday: articlesBySourceToday.map((row) => ({
-        source: row.source_name,
-        provider: row.provider,
-        count: row._count,
-      })),
+      ingestionStats: articlesBySource.map(
+        (row: { source_name: string; provider: string; _count: number }) => ({
+          source: row.source_name,
+          provider: row.provider,
+          count: row._count,
+        }),
+      ),
+      ingestionStatsToday: articlesBySourceToday.map(
+        (row: { source_name: string; provider: string; _count: number }) => ({
+          source: row.source_name,
+          provider: row.provider,
+          count: row._count,
+        }),
+      ),
       briefStats: {
         success_rate: Math.round(successRate * 100) / 100,
         avg_duration_ms: avgDuration ? Math.round(avgDuration) : 0,
         total_generated: totalBriefs,
         today_failed: failedToday,
       },
-      connectorFailures: connectorFailures.map((row) => ({
-        provider: row.provider,
-        error_count: row._count,
-        users_affected: row._count,
-      })),
+      connectorFailures: connectorFailures.map(
+        (row: {
+          provider: string;
+          _count: number;
+          _sum: { sync_failure_count: number | null };
+        }) => ({
+          provider: row.provider,
+          error_count: row._count,
+          users_affected: row._count,
+        }),
+      ),
       topTopics: topTopics
-        .filter((t) => t.topic !== null)
+        .filter((t: { topic: string | null }) => t.topic !== null)
         .slice(0, 10)
-        .map((t) => ({
+        .map((t: { topic: string | null; _count: number }) => ({
           topic: t.topic! as string,
           count: t._count,
         })),
