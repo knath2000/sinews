@@ -25,10 +25,10 @@ export async function GET(request: NextRequest) {
       const { db } = await import("@/server/db/client");
       return db.user_profiles.findUnique({
         where: { user_id: dbUser.id },
-        select: { subscription_tier: true },
+        select: { subscription_tier: true, is_admin: true },
       });
     })();
-    const isPremium = profile?.subscription_tier === "premium";
+    const isPremium = profile?.subscription_tier === "premium" || profile?.is_admin === true;
 
     const brief = await loadTodaysBrief(dbUser.id);
 
