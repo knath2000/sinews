@@ -95,7 +95,7 @@ export async function GET() {
       LIMIT 5
     `;
 
-    const recentReadingParsed = recentReading.map((r) => {
+    const recentReadingParsed = recentReading.map((r: { article_id: number; title: string; source_name: string; topics_json: string | null; created_at: string }) => {
       let topics: string[] = [];
       if (r.topics_json) {
         try {
