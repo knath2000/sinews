@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
-import { fetchArticlePageImageUrl } from "../src/server/news-fetcher";
-import { logError } from "../src/server/error-logger";
-import { normalizePublicImageUrl } from "../src/server/url-utils";
+import { fetchArticlePageImageUrl } from "../apps/web/src/server/news-fetcher";
+import { logError } from "../apps/web/src/server/error-logger";
+import { normalizePublicImageUrl } from "../apps/web/src/server/url-utils";
 
 const db = new PrismaClient();
 const LOOKBACK_DAYS = Number(process.env.BACKFILL_LOOKBACK_DAYS ?? "30");

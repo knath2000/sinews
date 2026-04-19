@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { logError } from "../src/server/error-logger";
+import { logError } from "../apps/web/src/server/error-logger";
 
 const db = new PrismaClient();
 
