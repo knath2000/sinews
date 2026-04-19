@@ -72,16 +72,13 @@ export async function GET() {
 
     // Compute brief totals
     const totalBriefs = briefsOverview.reduce(
-      (sum, b) => sum + b._count,
+      (sum: number, b: { _count: number }) => sum + b._count,
       0,
     );
-    const successfulBriefs =
-      briefsOverview.find((b) => b.status === "completed" || b.status === "success")
-        ?._count ?? 0;
+    const successfulBriefs = briefsOverview.find((b: { status: string, _count: number }) => b.status === "completed" || b.status === "success")?._count ?? 0;
     const successRate = totalBriefs > 0 ? (successfulBriefs / totalBriefs) * 100 : 0;
     const avgDuration =
-      briefsOverview.find((b) => b.status === "completed" || b.status === "success")
-        ?._avg.generation_duration_ms;
+      briefsOverview.find((b: { status: string, _count: number, _avg: { generation_duration_ms: number | null } }) => b.status === "completed" || b.status === "success")?._avg?.generation_duration_ms;
 
     return NextResponse.json({
       ingestionStats: articlesBySource.map((row) => ({
