@@ -108,7 +108,7 @@ export async function insertArticles(
     where: { canonical_url: { in: urls } },
     select: { canonical_url: true },
   });
-  const existingUrls = new Set(existing.map((e) => e.canonical_url));
+  const existingUrls = new Set(existing.map((e: { canonical_url: string }) => e.canonical_url));
   const newArticles = articles.filter(
     (a) => !existingUrls.has(a.canonical_url)
   );
