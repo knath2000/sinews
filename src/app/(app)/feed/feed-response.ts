@@ -18,6 +18,7 @@ export interface FeedArticleData {
   score: number;
   brief_item_id: number;
   is_paywalled?: boolean;
+  user_feedback?: "thumbs_up" | "thumbs_down" | null;
 }
 
 export interface FeedPayload {
@@ -77,6 +78,9 @@ function parseFeedArticleData(value: unknown): FeedArticleData | null {
     score: article.score,
     brief_item_id: article.brief_item_id,
     is_paywalled: typeof article.is_paywalled === 'boolean' ? article.is_paywalled : undefined,
+    user_feedback: (article.user_feedback === "thumbs_up" || article.user_feedback === "thumbs_down")
+      ? article.user_feedback
+      : null,
   };
 }
 
@@ -120,6 +124,7 @@ export interface FeedReplacementArticle {
   score: number;
   brief_item_id: number;
   is_paywalled?: boolean;
+  user_feedback?: "thumbs_up" | "thumbs_down" | null;
 }
 
 /** Response shape from POST /api/feedback. */
@@ -173,5 +178,6 @@ export function parseReplacementArticle(value: unknown): FeedReplacementArticle 
     score: a.score,
     brief_item_id: a.brief_item_id,
     is_paywalled: typeof a.is_paywalled === 'boolean' ? a.is_paywalled : undefined,
+    user_feedback: null,
   };
 }

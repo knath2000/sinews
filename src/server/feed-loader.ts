@@ -29,6 +29,7 @@ interface FeedArticle {
   rank: number;
   score: number;
   brief_item_id: number;
+  user_feedback: "thumbs_up" | "thumbs_down" | null;
 }
 
 /** Shape returned to the API for a single replacement article. */
@@ -47,6 +48,7 @@ export interface FeedReplacementResult {
   rank: number;
   score: number;
   brief_item_id: number;
+  user_feedback: "thumbs_up" | "thumbs_down" | null;
 }
 
 /**
@@ -93,6 +95,15 @@ export async function loadTodaysBrief(userId: string): Promise<{
     return null;
   }
 
+  const itemIds = brief.daily_brief_items.map((i) => i.id);
+  const feedbacks = await db.feedback_events.findMany({
+    where: {
+      user_id: userId,
+      daily_brief_item_id: { in: itemIds },
+    },
+  });
+  const feedbackMap = new Map(feedbacks.map((f) => [f.daily_brief_item_id, f.event_type]));
+
   const articlesWithSource = brief.daily_brief_items
     .map((item) => {
       const article = item.article;
@@ -126,6 +137,7 @@ export async function loadTodaysBrief(userId: string): Promise<{
           rank: item.rank,
           score: item.score,
           brief_item_id: item.id,
+          user_feedback: (feedbackMap.get(item.id) as "thumbs_up" | "thumbs_down" | null) ?? null,
         },
       };
     })
@@ -520,5 +532,6 @@ export async function findReplacementArticle(
     rank: targetItem.rank,
     score: best.score,
     brief_item_id: briefItemId,
+    user_feedback: null,
   };
 }

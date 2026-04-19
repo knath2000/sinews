@@ -665,7 +665,11 @@ function ArticleCard({
   onDownvote?: (article: FeedArticleData) => void;
   mounted: boolean;
 }) {
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(
+    article.user_feedback === "thumbs_up" ? "up"
+      : article.user_feedback === "thumbs_down" ? "down"
+      : null
+  );
 
   const handleFeedback = useCallback(
     (type: "thumbs_up" | "thumbs_down") => {
