@@ -17,7 +17,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      policies: policies.map((p: { source_name: string; enabled: boolean; quality_floor: number; license_class: string }) => ({
+      policies: policies.map((p: { enabled: boolean; source_name: string; license_class: string | null; quality_floor: number }) => ({
         sourceName: p.source_name,
         enabled: p.enabled,
         qualityFloor: p.quality_floor,
