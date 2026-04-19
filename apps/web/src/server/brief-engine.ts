@@ -92,6 +92,10 @@ type CandidateAnnotationRow = {
   tldr: string | null;
 };
 
+type ExistingArticleUrlRow = {
+  canonical_url: string;
+};
+
 /**
  * Calculate user interest signals weights for topics and entities.
  * Builds a weighted profile from interest_signals, user_topic_preferences,
@@ -1002,7 +1006,7 @@ async function bootstrapLiveArticlesForNewUser(): Promise<number> {
   const existingUrls = await db.articles.findMany({
     where: { canonical_url: { in: batch.map((a) => a.canonical_url) } },
     select: { canonical_url: true },
-  });
+  }) as ExistingArticleUrlRow[];
   const existingUrlSet = new Set(existingUrls.map((e) => e.canonical_url));
   const newArticles: RawArticle[] = batch.filter((a) => !existingUrlSet.has(a.canonical_url));
 
