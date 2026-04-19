@@ -67,6 +67,7 @@ export default function SettingsPage({
   // Billing
   const [billingRedirecting, setBillingRedirecting] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
 
   // Feedback history
   interface FeedbackItem {
@@ -175,6 +176,7 @@ export default function SettingsPage({
         if (data) {
           setProfileDisplayName(data.displayName ?? "");
           setProfileTimezone(data.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+          setSubscriptionTier(data.subscriptionTier ?? "free");
         }
       })
       .catch(() => {});
@@ -420,16 +422,19 @@ export default function SettingsPage({
     window.location.href = "/login";
   }
 
-  async function handleOpenBillingPortal() {
+  async function handleBillingAction() {
     setBillingRedirecting(true);
     setBillingError(null);
     try {
-      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const endpoint = subscriptionTier === "premium"
+        ? "/api/billing/portal"
+        : "/api/billing/checkout";
+      const res = await fetch(endpoint, { method: "POST" });
       const data = await res.json();
       if (res.ok && data.url) {
         window.location.href = data.url;
       } else {
-        setBillingError(data.error ?? "Unable to open billing portal");
+        setBillingError(data.error ?? "Something went wrong");
         setBillingRedirecting(false);
       }
     } catch {
@@ -731,29 +736,48 @@ export default function SettingsPage({
       {/* ── Manage Billing ─────────────────────────── */}
       <section id="manage-billing" className="scroll-mt-8">
         <ShellCard className="p-6">
-          <div className="mb-5">
-            <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
-              Manage Billing
-            </h2>
-            <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
-              Update your payment method, view invoices, and manage your subscription on Stripe.
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--ds-text)" }}>
+                {subscriptionTier === "premium" ? "Premium Subscription" : "Free Plan"}
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ds-text-muted)" }}>
+                {subscriptionTier === "premium"
+                  ? "Update your payment method, download invoices, or cancel your subscription."
+                  : "Upgrade to unlock AI summaries, TLDRs, and advanced insights for your feed."}
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
-              onClick={handleOpenBillingPortal}
+              onClick={handleBillingAction}
               disabled={billingRedirecting}
               className="ds-btn"
+              style={{
+                ...(subscriptionTier !== "premium"
+                  ? {
+                      backgroundColor: "var(--ds-accent)",
+                      color: "var(--ds-bg)",
+                      boxShadow: "var(--ds-accent-glow)",
+                    }
+                  : {}),
+              }}
             >
               {billingRedirecting ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-current opacity-30 border-t-current" />
-                  Redirecting…
+                  Connecting…
+                </>
+              ) : subscriptionTier === "premium" ? (
+                <>
+                  <CreditCard className="h-4 w-4" />
+                  Manage Billing
+                  <ArrowUpRight className="h-3.5 w-3.5" />
                 </>
               ) : (
                 <>
-                  <CreditCard className="h-4 w-4" />
-                  Open Billing Portal
+                  <Sparkles className="h-4 w-4" />
+                  Upgrade to Premium
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </>
               )}

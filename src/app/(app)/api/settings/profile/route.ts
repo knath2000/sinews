@@ -12,6 +12,7 @@ export async function GET() {
   const { dbUser } = auth;
 
   const displayName = dbUser.profile?.displayName ?? "";
+  const subscriptionTier = dbUser.profile?.subscriptionTier ?? "free";
 
   // Get timezone from the database
   const userRecord = await db.users.findUnique({
@@ -23,6 +24,7 @@ export async function GET() {
   return NextResponse.json({
     displayName,
     timezone,
+    subscriptionTier,
   });
 }
 

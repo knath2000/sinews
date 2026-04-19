@@ -13,6 +13,7 @@ export interface AuthUser {
     lastActiveAt: Date;
     isAdmin: boolean;
     darkMode: boolean;
+    subscriptionTier: string;
   } | null;
 }
 
@@ -57,6 +58,7 @@ export async function ensureUser(supabaseUserId: string, email: string): Promise
           lastActiveAt: user.user_profiles.last_active_at,
           isAdmin: user.user_profiles.is_admin,
           darkMode: user.user_profiles.dark_mode,
+          subscriptionTier: user.user_profiles.subscription_tier,
         }
       : null,
   };
