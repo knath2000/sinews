@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-server";
 import { db } from "@/server/db/client";
 import { logError } from "@/server/error-logger";
+import { Prisma } from "@prisma/client";
 
 /**
  * POST /api/accounts/delete
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
   const userId = dbUser.id;
 
   try {
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Delete interest signals
       await tx.interest_signals.deleteMany({
         where: { user_id: userId },
