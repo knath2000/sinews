@@ -654,6 +654,52 @@ function ReadingHistory({
   );
 }
 
+function ReplacementNoticeBanner({
+  reason,
+  message,
+  onDismiss,
+}: {
+  reason: string;
+  message: string;
+  onDismiss?: () => void;
+}) {
+  return (
+    <div
+      className="rounded-[10px] border p-4"
+      style={{
+        backgroundColor: "rgba(239,68,68,0.05)",
+        borderColor: "rgba(239,68,68,0.2)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold" style={{ color: "#dc2626" }}>
+            Could not replace this article
+          </p>
+          <p className="mt-1 text-sm leading-6" style={{ color: "var(--ds-text-muted)" }}>
+            {message}
+          </p>
+          {reason === "race_lost_retry_exhausted" && (
+            <p className="mt-1 text-xs italic" style={{ color: "var(--ds-text-dim)" }}>
+              This can happen during a rapid succession of feedback actions. Please try again.
+            </p>
+          )}
+        </div>
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="shrink-0 text-xs font-medium transition-colors hover:text-zinc-700"
+            style={{ color: "var(--ds-text-dim)" }}
+          >
+            Dismiss
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ArticleCard({
   article,
   index,
@@ -662,7 +708,7 @@ function ArticleCard({
 }: {
   article: FeedArticleData;
   index: number;
-  onDownvote?: (article: FeedArticleData) => void;
+  onDownvote?: (article: FeedArticleData) => Promise<void>;
   mounted: boolean;
 }) {
   const [feedback, setFeedback] = useState<"up" | "down" | null>(
@@ -670,12 +716,15 @@ function ArticleCard({
       : article.user_feedback === "thumbs_down" ? "down"
       : null
   );
+  const [isPending, setIsPending] = useState(false);
 
   const handleFeedback = useCallback(
     (type: "thumbs_up" | "thumbs_down") => {
+      if (isPending) return;
       setFeedback(type === "thumbs_up" ? "up" : "down");
       if (type === "thumbs_down") {
-        onDownvote?.(article);
+        setIsPending(true);
+        void Promise.resolve(onDownvote?.(article)).finally(() => setIsPending(false));
       } else {
         fetch("/api/feedback", {
           method: "POST",
@@ -688,7 +737,7 @@ function ArticleCard({
         }).catch(() => {});
       }
     },
-    [article, onDownvote]
+    [article, onDownvote, isPending]
   );
 
   const accent = fallbackGradients[index % fallbackGradients.length];
@@ -832,17 +881,25 @@ function ArticleCard({
           </div>
         )}
 
+        {article.replacementNotice && (
+          <ReplacementNoticeBanner
+            reason={article.replacementNotice.reason}
+            message={article.replacementNotice.message}
+          />
+        )}
+
         <div className="flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderTop: "1px solid var(--ds-border)" }}>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => handleFeedback("thumbs_up")}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 borderColor: feedback === "up" ? "rgba(34,197,94,0.35)" : "var(--ds-border)",
                 backgroundColor: feedback === "up" ? "rgba(34,197,94,0.1)" : "var(--ds-surface-2)",
                 color: feedback === "up" ? "#22c55e" : "var(--ds-text-muted)",
               }}
+              disabled={isPending}
               aria-label="Thumbs up"
               aria-pressed={feedback === "up"}
             >
@@ -851,12 +908,13 @@ function ArticleCard({
             <button
               type="button"
               onClick={() => handleFeedback("thumbs_down")}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 borderColor: feedback === "down" ? "rgba(239,68,68,0.35)" : "var(--ds-border)",
                 backgroundColor: feedback === "down" ? "rgba(239,68,68,0.1)" : "var(--ds-surface-2)",
                 color: feedback === "down" ? "#ef4444" : "var(--ds-text-muted)",
               }}
+              disabled={isPending}
               aria-label="Thumbs down"
               aria-pressed={feedback === "down"}
             >
@@ -1013,6 +1071,7 @@ export default function FeedPage() {
         }
       } catch {}
 
+      // Check cache version — if stale, ignore cached data
       const cached = getCachedBrief();
       if (cached && cached.articles.length > 0) {
         setArticles(cached.articles);
@@ -1149,7 +1208,13 @@ export default function FeedPage() {
           recorded: boolean;
           replaced: boolean;
           article?: Record<string, unknown> | null;
+          replacement?: null | {
+            ok: boolean;
+            reason: string;
+            message: string;
+          };
         };
+
         if (data.replaced && data.article) {
           const replacement = parseReplacementArticle(data.article);
           if (replacement) {
@@ -1158,7 +1223,9 @@ export default function FeedPage() {
             setArticles((prev) => {
               if (!prev) return prev;
               return prev.map((a) =>
-                a.brief_item_id === disliked.brief_item_id ? replacement : a
+                a.brief_item_id === disliked.brief_item_id
+                  ? { ...replacement, replacementNotice: undefined }
+                  : a
               );
             });
 
@@ -1168,12 +1235,28 @@ export default function FeedPage() {
             if (cached) {
               setCachedBrief({
                 articles: cached.articles.map((a) =>
-                  a.brief_item_id === disliked.brief_item_id ? replacement : a
+                  a.brief_item_id === disliked.brief_item_id
+                    ? { ...replacement, replacementNotice: undefined }
+                    : a
                 ),
                 generatedAt: newGeneratedAt,
               });
             }
           }
+        } else if (!data.replaced && data.replacement && !data.replacement.ok) {
+          // Structured failure: show the notice inline on the card
+          const notice = {
+            reason: data.replacement.reason as FeedArticleData["replacementNotice"] extends { reason: infer R } ? R : never,
+            message: data.replacement.message,
+          };
+          setArticles((prev) => {
+            if (!prev) return prev;
+            return prev.map((a) =>
+              a.brief_item_id === disliked.brief_item_id
+                ? { ...a, replacementNotice: notice }
+                : a
+            );
+          });
         }
       } catch {
         // Silently fail

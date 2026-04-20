@@ -194,7 +194,8 @@ model daily_brief_items {
   summary         String? @db.Text
   tldr            String? @db.Text
   why_recommended String? @db.Text
-  provenance_json String? @db.Text
+  provenance_json    String?   @db.Text
+  replacement_outcome String? @db.Text
 
   daily_brief daily_briefs @relation(fields: [daily_brief_id], references: [id], onDelete: Cascade)
   article     articles?    @relation(fields: [article_id], references: [id], onDelete: SetNull)

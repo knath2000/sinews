@@ -55,14 +55,22 @@ export async function POST(request: Request) {
         articleId
       );
 
-      if (result !== null) {
+      if (result.outcome === null) {
         return NextResponse.json({
           ok: true,
           recorded: true,
           replaced: true,
-          article: result,
+          article: result.article,
         });
       }
+
+      // Structured failure: return replacement object with reason
+      return NextResponse.json({
+        ok: true,
+        recorded: true,
+        replaced: false,
+        replacement: result.outcome,
+      });
     }
 
     return NextResponse.json({ ok: true, recorded: true, replaced: false });

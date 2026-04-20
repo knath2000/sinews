@@ -19,11 +19,40 @@ export interface FeedArticleData {
   brief_item_id: number;
   is_paywalled?: boolean;
   user_feedback?: "thumbs_up" | "thumbs_down" | null;
+  replacementNotice?: {
+    reason: ReplacementOutcomeReason;
+    message: string;
+  };
 }
+
+export type ReplacementOutcomeReason =
+  | "no_current_day_candidates"
+  | "all_candidates_filtered"
+  | "already_shown_or_duplicate_cluster"
+  | "race_lost_retry_exhausted";
 
 export interface FeedPayload {
   articles: FeedArticleData[];
   generatedAt: string | null;
+}
+
+const VALID_OUTCOME_REASONS: ReadonlySet<ReplacementOutcomeReason> = new Set([
+  "no_current_day_candidates",
+  "all_candidates_filtered",
+  "already_shown_or_duplicate_cluster",
+  "race_lost_retry_exhausted",
+]);
+
+function isReplacementNotice(value: unknown): value is { reason: ReplacementOutcomeReason; message: string } {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    "reason" in value &&
+    (VALID_OUTCOME_REASONS as ReadonlySet<string>).has((value as { reason: string }).reason) &&
+    typeof value === "object" &&
+    "message" in value &&
+    typeof (value as { message: string }).message === "string"
+  );
 }
 
 function parseFeedArticleData(value: unknown): FeedArticleData | null {
@@ -81,6 +110,9 @@ function parseFeedArticleData(value: unknown): FeedArticleData | null {
     user_feedback: (article.user_feedback === "thumbs_up" || article.user_feedback === "thumbs_down")
       ? article.user_feedback
       : null,
+    replacementNotice: isReplacementNotice(article.replacementNotice)
+      ? article.replacementNotice
+      : undefined,
   };
 }
 
@@ -125,6 +157,7 @@ export interface FeedReplacementArticle {
   brief_item_id: number;
   is_paywalled?: boolean;
   user_feedback?: "thumbs_up" | "thumbs_down" | null;
+  replacementNotice?: { reason: string; message: string };
 }
 
 /** Response shape from POST /api/feedback. */
@@ -133,6 +166,11 @@ export interface FeedbackResponse {
   recorded: boolean;
   replaced: boolean;
   article?: FeedReplacementArticle | null;
+  replacement?: null | {
+    ok: boolean;
+    reason: ReplacementOutcomeReason;
+    message: string;
+  };
 }
 
 /** Validate a replacement article from the feedback response. */
@@ -179,5 +217,6 @@ export function parseReplacementArticle(value: unknown): FeedReplacementArticle 
     brief_item_id: a.brief_item_id,
     is_paywalled: typeof a.is_paywalled === 'boolean' ? a.is_paywalled : undefined,
     user_feedback: null,
+    replacementNotice: undefined,
   };
 }

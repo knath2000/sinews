@@ -32,6 +32,7 @@ interface FeedArticle {
   score: number;
   brief_item_id: number;
   user_feedback: "thumbs_up" | "thumbs_down" | null;
+  replacement_notice: { reason: string; message: string } | null;
 }
 
 type FeedbackEventRow = {
@@ -69,6 +70,9 @@ type LoadedBriefItemRow = {
   tldr: string | null;
   why_recommended: string | null;
   provenance_json: string | null;
+  replacement_outcome: string | null;
+  article_id: number | null;
+  archived_article_id: number | null;
   article: LoadedBriefArticleRow | null;
   archived_article: {
     id: number;
@@ -128,6 +132,323 @@ export interface FeedReplacementResult {
   user_feedback: "thumbs_up" | "thumbs_down" | null;
 }
 
+// -- Replacement outcomes ---------------------------------------------------
+
+export type ReplacementOutcomeReason =
+  | "no_current_day_candidates"
+  | "all_candidates_filtered"
+  | "already_shown_or_duplicate_cluster"
+  | "race_lost_retry_exhausted";
+
+export interface ReplacementFailure {
+  outcome: {
+    ok: false;
+    reason: ReplacementOutcomeReason;
+    message: string;
+  };
+  article: null;
+}
+
+function replacementFailure(
+  reason: ReplacementOutcomeReason,
+  message: string,
+): ReplacementFailure {
+  return { outcome: { ok: false as const, reason, message }, article: null };
+}
+
+interface ReplacementAttemptContext {
+  userId: string;
+  briefItemId: number;
+  dislikedId: number;
+  dislikedDedupeKey: string | null;
+  dislikedClusterId: string | null;
+  keptDedupeKeys: Set<string>;
+  keptClusterIds: Set<string>;
+  existingArticleIds: Set<number>;
+  briefId: number;
+  targetItem: ReplacementBriefItemRow;
+}
+
+const REPLACEMENT_RETRY_ATTEMPTS = 2;
+
+async function attemptReplacement(
+  ctx: ReplacementAttemptContext,
+): Promise<ReplacementFailure | FeedReplacementResult> {
+  const { buildUserProfile, getCandidates, filterBySourcePolicy, scoreCandidates, getYesterdayBriefTopics } =
+    await import("@/server/brief-engine");
+
+  const now = new Date();
+
+  const since = getCurrentArticleCutoff(now);
+  let candidates = await getCandidates(since, 50);
+  if (candidates.length === 0) {
+    return replacementFailure(
+      "no_current_day_candidates",
+      "No current-date articles were available to replace this article.",
+    );
+  }
+
+  candidates = await filterBySourcePolicy(candidates);
+
+  // Exclude: already in brief, the disliked article, same dedupe/cluster
+  candidates = candidates.filter(
+    (c) =>
+      !ctx.existingArticleIds.has(c.article_id) &&
+      c.article_id !== ctx.dislikedId &&
+      (!ctx.dislikedDedupeKey || c.dedupe_key !== ctx.dislikedDedupeKey) &&
+      (!ctx.dislikedClusterId || c.cluster_id !== ctx.dislikedClusterId) &&
+      !ctx.keptDedupeKeys.has(c.dedupe_key) &&
+      (!c.cluster_id || !ctx.keptClusterIds.has(c.cluster_id)),
+  );
+
+  if (candidates.length === 0) {
+    return replacementFailure(
+      "all_candidates_filtered",
+      "No current-date articles matched your preferences after excluding articles already shown and duplicate clusters.",
+    );
+  }
+
+  // Build user profile and score
+  const profile = await buildUserProfile(ctx.userId);
+  const yesterdayBriefTopics = await getYesterdayBriefTopics(ctx.userId);
+  const scored = scoreCandidates(candidates, profile.topicWeights, profile.entityWeights, now, yesterdayBriefTopics);
+  if (scored.length === 0) {
+    return replacementFailure(
+      "already_shown_or_duplicate_cluster",
+      "All matching articles were already shown in today's brief.",
+    );
+  }
+
+  // Take the top scorer
+  const best = scored[0];
+  const article = await getArticleSnapshotById(best.article_id);
+  if (!article) {
+    return replacementFailure(
+      "no_current_day_candidates",
+      "Could not load the replacement article.",
+    );
+  }
+
+  // Generate summary + why_recommended
+  let summary: string;
+  let tldr: string;
+  let whyRecommended: string;
+  try {
+    const matchedTopics = best.topics.filter((t) => profile.topicWeights.has(t));
+    const matchedEntities = best.entities.filter((e) => profile.entityWeights.has(e));
+    const generated = await generateBriefItem({
+      article_title: best.title,
+      article_source: best.source_name,
+      article_snippet: sanitizeFeedSnippet(article.snippet ?? null),
+      matched_topics: matchedTopics,
+      matched_entities: matchedEntities,
+    });
+    summary = generated.summary;
+    tldr = generated.tldr;
+    whyRecommended = generated.why_recommended;
+  } catch {
+    summary = best.title;
+    tldr = "";
+    whyRecommended = "Relevant to your interests";
+  }
+
+  // Build provenance
+  const provenance = buildBriefItemProvenance({
+    matchedTopics: best.topics.filter((t) => profile.topicWeights.has(t)),
+    matchedEntities: best.entities.filter((e) => profile.entityWeights.has(e)),
+    safariTopicWeights: profile.safariHistoryImport.topicWeights,
+    safariTopicDomainWeights: profile.safariHistoryImport.topicDomainWeights,
+  });
+
+  // Patch the brief item in place with collision retry
+  for (let attempt = 1; attempt <= REPLACEMENT_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await db.$transaction(async (tx: Prisma.TransactionClient) => {
+        await tx.daily_brief_items.update({
+          where: { id: ctx.briefItemId },
+          data: {
+            article_id: best.article_id,
+            score: best.score,
+            summary,
+            tldr,
+            why_recommended: whyRecommended,
+            provenance_json: JSON.stringify(provenance),
+            replacement_outcome: null,
+          },
+        });
+
+        await tx.daily_briefs.update({
+          where: { id: ctx.briefId },
+          data: { generated_at: new Date() },
+        });
+      });
+
+      const signals = deriveMatchedSignals(
+        JSON.stringify(best.topics),
+        JSON.stringify(best.entities),
+      );
+
+      return {
+        id: best.article_id,
+        title: sanitizeFeedTitle(best.title) ?? best.title,
+        source_name: best.source_name,
+        canonical_url: article.canonical_url ?? "#",
+        image_url: article.image_url?.trim() || null,
+        published_at: best.published_at?.toISOString() ?? null,
+        summary,
+        tldr,
+        why_recommended: whyRecommended,
+        matched_signals: signals,
+        provenance,
+        rank: ctx.targetItem.rank,
+        score: best.score,
+        brief_item_id: ctx.briefItemId,
+        user_feedback: null,
+      };
+    } catch (err: unknown) {
+      const code =
+        typeof err === "object" && err !== null && "code" in err
+          ? (err as { code?: string }).code
+          : undefined;
+      const isUniqueConstraintViolation =
+        code === "P2002" || code === "P2003";
+
+      if (isUniqueConstraintViolation && attempt < REPLACEMENT_RETRY_ATTEMPTS) {
+        logError(
+          "replacement-collision-retry",
+          new Error("Duplicate article collision during replacement, retrying"),
+          {
+            briefItemId: ctx.briefItemId,
+            attemptedArticleId: best.article_id,
+            attempt,
+          },
+        );
+        continue;
+      }
+
+      if (isUniqueConstraintViolation && attempt >= REPLACEMENT_RETRY_ATTEMPTS) {
+        return replacementFailure(
+          "race_lost_retry_exhausted",
+          "A replacement was found but could not be applied due to a race condition. Please try again.",
+        );
+      }
+
+      throw err;
+    }
+  }
+
+  return replacementFailure(
+    "already_shown_or_duplicate_cluster",
+    "All matching articles were already shown in today's brief.",
+  );
+}
+
+/**
+ * Given a disliked article in today's brief, find a single replacement
+ * article and patch that daily_brief_items row in place.
+ *
+ * Returns:
+ *   - { outcome: null, article: FeedReplacementResult } on success
+ *   - { outcome: {ok:false, reason, message}, article: null } on failure
+ */
+export async function findReplacementArticle(
+  userId: string,
+  briefItemId: number,
+  dislikedArticleId: number | undefined,
+): Promise<{ outcome: null; article: FeedReplacementResult } | ReplacementFailure> {
+  const briefItem = await db.daily_brief_items.findUnique({
+    where: { id: briefItemId },
+    include: {
+      daily_brief: {
+        include: {
+          daily_brief_items: {
+            orderBy: { rank: "asc" },
+          },
+        },
+      },
+    },
+  }) as ReplacementBriefLookupRow | null;
+  const brief = briefItem?.daily_brief;
+  if (!brief || brief.status !== "completed") {
+    return replacementFailure(
+      "no_current_day_candidates",
+      "No current-date articles were available to replace this article.",
+    );
+  }
+
+  const targetItem = brief.daily_brief_items.find((i) => i.id === briefItemId);
+  if (!targetItem) {
+    return replacementFailure(
+      "no_current_day_candidates",
+      "No current-date articles were available to replace this article.",
+    );
+  }
+
+  const dislikedId = dislikedArticleId ?? targetItem.article_id ?? targetItem.archived_article_id;
+  if (!dislikedId) {
+    return replacementFailure(
+      "no_current_day_candidates",
+      "No current-date articles were available to replace this article.",
+    );
+  }
+
+  const existingArticleIds = new Set<number>(
+    brief.daily_brief_items
+      .map((i) => i.article_id ?? i.archived_article_id)
+      .filter((id): id is number => id !== null && id !== dislikedId),
+  );
+
+  const dislikedArticle = await getArticleSnapshotById(dislikedId);
+  if (!dislikedArticle) {
+    return replacementFailure(
+      "no_current_day_candidates",
+      "No current-date articles were available to replace this article.",
+    );
+  }
+  const dislikedDedupeKey = dislikedArticle.dedupe_key ?? null;
+  const dislikedClusterId = dislikedArticle.cluster_id;
+
+  const keptItemIds = brief.daily_brief_items
+    .filter((i) => i.id !== briefItemId && (i.article_id !== null || i.archived_article_id !== null))
+    .map((i) => (i.article_id ?? i.archived_article_id) as number);
+  const keptDedupeKeys = new Set<string>();
+  const keptClusterIds = new Set<string>();
+  if (keptItemIds.length > 0) {
+    const keptArticles = await Promise.all(keptItemIds.map((id) => getArticleSnapshotById(id)));
+    for (const article of keptArticles) {
+      if (!article) continue;
+      if (article.dedupe_key) keptDedupeKeys.add(article.dedupe_key);
+      if (article.cluster_id) keptClusterIds.add(article.cluster_id);
+    }
+  }
+
+  const ctx: ReplacementAttemptContext = {
+    userId,
+    briefItemId,
+    dislikedId,
+    dislikedDedupeKey,
+    dislikedClusterId,
+    keptDedupeKeys,
+    keptClusterIds,
+    existingArticleIds,
+    briefId: brief.id,
+    targetItem,
+  };
+
+  const result = await attemptReplacement(ctx);
+
+  if ("outcome" in result) {
+    // ReplacementFailure
+    await db.daily_brief_items.update({
+      where: { id: briefItemId },
+      data: { replacement_outcome: JSON.stringify(result.outcome) },
+    });
+    return result;
+  }
+
+  return { outcome: null, article: result as FeedReplacementResult };
+}
+
 /**
  * Loads today's 5-article brief for a given user.
  * Returns null if no brief exists today or is still generating.
@@ -179,7 +500,6 @@ export async function loadTodaysBrief(userId: string): Promise<{
     return null;
   }
 
-  // If brief exists but has no items, it might still be generating
   if (
     (brief.status === "pending" || brief.status === "generating") &&
     brief.daily_brief_items.length === 0
@@ -187,7 +507,25 @@ export async function loadTodaysBrief(userId: string): Promise<{
     return null;
   }
 
-  const itemIds = brief.daily_brief_items.map((i) => i.id);
+  // ── Duplicate suppression: if any two items share article_id or
+  //    archived_article_id, keep only the first by rank and log anomaly.
+  const seenIds = new Set<number>();
+  const dedupedItems: LoadedBriefItemRow[] = [];
+  for (const item of brief.daily_brief_items) {
+    const articleId = item.article_id ?? item.archived_article_id;
+    if (articleId !== null && seenIds.has(articleId)) {
+      logError(
+        "brief-duplicate-suppression",
+        new Error("Duplicate article found in brief, suppressing later occurrence"),
+        { briefId: brief.id, userId, duplicateArticleId: articleId, itemId: item.id },
+      );
+      continue;
+    }
+    if (articleId !== null) seenIds.add(articleId);
+    dedupedItems.push(item);
+  }
+
+  const itemIds = dedupedItems.map((i) => i.id);
   const feedbacks: FeedbackEventRow[] = await db.feedback_events.findMany({
     where: {
       user_id: userId,
@@ -196,7 +534,7 @@ export async function loadTodaysBrief(userId: string): Promise<{
   }) as FeedbackEventRow[];
   const feedbackMap = new Map(feedbacks.map((f) => [f.daily_brief_item_id, f.event_type]));
 
-  const articlesWithSource = brief.daily_brief_items
+  const articlesWithSource = dedupedItems
     .map((item) => {
       const article = item.article ?? item.archived_article;
       if (!article) return null;
@@ -222,23 +560,24 @@ export async function loadTodaysBrief(userId: string): Promise<{
           matched_signals: "article_annotations" in article && article.article_annotations
             ? deriveMatchedSignals(
                 article.article_annotations.topics_json,
-                article.article_annotations.entities_json
+                article.article_annotations.entities_json,
               )
             : deriveMatchedSignals(
                 item.archived_article?.topics_json ?? null,
-                item.archived_article?.entities_json ?? null
+                item.archived_article?.entities_json ?? null,
               ),
           provenance: parseBriefItemProvenance(item.provenance_json),
           rank: item.rank,
           score: item.score,
           brief_item_id: item.id,
           user_feedback: (feedbackMap.get(item.id) as "thumbs_up" | "thumbs_down" | null) ?? null,
+          replacement_notice: parseBriefItemReplacementNotice(item.replacement_outcome),
         },
       };
     })
     .filter(
       (entry): entry is { article: NonNullable<typeof brief.daily_brief_items[number]["article"] | typeof brief.daily_brief_items[number]["archived_article"]>; feedArticle: FeedArticle } =>
-        entry !== null
+        entry !== null,
     );
 
   const articles = articlesWithSource
@@ -262,7 +601,7 @@ export async function loadTodaysBrief(userId: string): Promise<{
         userId,
         skippedCount,
         totalItems: brief.daily_brief_items.length,
-      }
+      },
     );
   }
 
@@ -279,34 +618,22 @@ export async function loadTodaysBrief(userId: string): Promise<{
 }
 
 /**
- * Derive matched signals array from article annotations JSON strings.
- * Returns null if annotations are missing.
+ * Parse a replacement_notice JSON string from a brief item into a structured object.
  */
-function deriveMatchedSignals(
-  topicsJson: string | null,
-  entitiesJson: string | null
-): string[] | null {
-  const signals: string[] = [];
+function parseBriefItemReplacementNotice(value: string | null): { reason: string; message: string } | null {
+  if (!value) return null;
   try {
-    if (topicsJson) {
-      const topics = JSON.parse(topicsJson) as string[] | { topic?: string }[];
-      if (Array.isArray(topics)) {
-        topics.forEach((t) => {
-          if (typeof t === "string") signals.push(t);
-          else if (typeof t === "object" && t.topic) signals.push(t.topic);
-        });
-      }
-    }
-    if (entitiesJson) {
-      const entities = JSON.parse(entitiesJson) as string[];
-      if (Array.isArray(entities)) {
-        signals.push(...entities.slice(0, 3)); // cap at 3 entities
-      }
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (
+      typeof parsed.reason === "string" &&
+      typeof parsed.message === "string"
+    ) {
+      return { reason: parsed.reason, message: parsed.message };
     }
   } catch {
-    return null;
+    // Ignore parse errors
   }
-  return signals.length > 0 ? signals : null;
+  return null;
 }
 
 /**
@@ -377,7 +704,7 @@ export async function submitFeedbackAndSignals(
     let entities: string[] = [];
 
     const snapshot = await getArticleSnapshotById(
-      articleId ?? briefItem?.article_id ?? briefItem?.archived_article_id ?? 0
+      articleId ?? briefItem?.article_id ?? briefItem?.archived_article_id ?? 0,
     );
     if (snapshot?.topics_json) {
       try {
@@ -448,179 +775,33 @@ export async function submitFeedbackAndSignals(
   });
 }
 
-// -- Immediate replacement for thumbs_down ---------------------------------
-
 /**
- * Given a disliked article in today's brief, find a single replacement
- * article and patch that daily_brief_items row in place.
- *
- * Returns a FeedReplacementResult (same shape the feed page expects)
- * or null if no eligible replacement exists.
+ * Derive matched signals array from article annotations JSON strings.
+ * Returns null if annotations are missing.
  */
-export async function findReplacementArticle(
-  userId: string,
-  briefItemId: number,
-  dislikedArticleId: number | undefined,
-): Promise<FeedReplacementResult | null> {
-  const { buildUserProfile, getCandidates, filterBySourcePolicy, scoreCandidates, getYesterdayBriefTopics } =
-    await import("@/server/brief-engine");
-
-  const now = new Date();
-
-  // Resolve the target brief via the brief item's FK rather than a date query.
-  const briefItem = await db.daily_brief_items.findUnique({
-    where: { id: briefItemId },
-    include: {
-      daily_brief: {
-        include: {
-          daily_brief_items: {
-            orderBy: { rank: "asc" },
-          },
-        },
-      },
-    },
-  }) as ReplacementBriefLookupRow | null;
-  const brief = briefItem?.daily_brief;
-  if (!brief || brief.status !== "completed") return null;
-
-  const targetItem = brief.daily_brief_items.find((i) => i.id === briefItemId);
-  if (!targetItem) return null;
-
-  const dislikedId = dislikedArticleId ?? targetItem.article_id ?? targetItem.archived_article_id;
-  if (!dislikedId) return null;
-
-  // Build sets to exclude
-  const existingArticleIds = new Set<number>(
-    brief.daily_brief_items
-      .map((i) => i.article_id ?? i.archived_article_id)
-      .filter((id): id is number => id !== null)
-  );
-
-  // Get the disliked article's annotation for exclusion
-  const dislikedArticle = await getArticleSnapshotById(dislikedId);
-  if (!dislikedArticle) return null;
-  const dislikedDedupeKey = dislikedArticle.dedupe_key ?? null;
-  const dislikedClusterId = dislikedArticle.cluster_id;
-
-  // Gather dedupe/cluster keys from the 4 kept articles
-  const keptItemIds = brief.daily_brief_items
-    .filter((i) => i.id !== briefItemId && (i.article_id !== null || i.archived_article_id !== null))
-    .map((i) => (i.article_id ?? i.archived_article_id) as number);
-  const keptDedupeKeys = new Set<string>();
-  const keptClusterIds = new Set<string>();
-  if (keptItemIds.length > 0) {
-    const keptArticles = await Promise.all(keptItemIds.map((id) => getArticleSnapshotById(id)));
-    for (const article of keptArticles) {
-      if (!article) continue;
-      if (article.dedupe_key) keptDedupeKeys.add(article.dedupe_key);
-      if (article.cluster_id) keptClusterIds.add(article.cluster_id);
-    }
-  }
-
-  // Fetch candidate pool from the current UTC day
-  const since = getCurrentArticleCutoff(now);
-  let candidates = await getCandidates(since, 50);
-  if (candidates.length === 0) return null;
-
-  candidates = await filterBySourcePolicy(candidates);
-
-  // Exclude: already in brief, the disliked article, same dedupe/cluster
-  candidates = candidates.filter(
-    (c) =>
-      !existingArticleIds.has(c.article_id) &&
-      c.article_id !== dislikedId &&
-      (!dislikedDedupeKey || c.dedupe_key !== dislikedDedupeKey) &&
-      (!dislikedClusterId || c.cluster_id !== dislikedClusterId) &&
-      !keptDedupeKeys.has(c.dedupe_key) &&
-      (!c.cluster_id || !keptClusterIds.has(c.cluster_id))
-  );
-
-  if (candidates.length === 0) return null;
-
-  // Build user profile and score
-  const profile = await buildUserProfile(userId);
-  const yesterdayBriefTopics = await getYesterdayBriefTopics(userId);
-  const scored = scoreCandidates(candidates, profile.topicWeights, profile.entityWeights, now, yesterdayBriefTopics);
-  if (scored.length === 0) return null;
-
-  // Take the top scorer
-  const best = scored[0];
-  const article = await getArticleSnapshotById(best.article_id);
-  if (!article) return null;
-
-  // Generate summary + why_recommended
-  let summary: string;
-  let tldr: string;
-  let whyRecommended: string;
+function deriveMatchedSignals(
+  topicsJson: string | null,
+  entitiesJson: string | null,
+): string[] | null {
+  const signals: string[] = [];
   try {
-    const matchedTopics = best.topics.filter((t) => profile.topicWeights.has(t));
-    const matchedEntities = best.entities.filter((e) => profile.entityWeights.has(e));
-    const generated = await generateBriefItem({
-      article_title: best.title,
-      article_source: best.source_name,
-      article_snippet: sanitizeFeedSnippet(article.snippet ?? null),
-      matched_topics: matchedTopics,
-      matched_entities: matchedEntities,
-    });
-    summary = generated.summary;
-    tldr = generated.tldr;
-    whyRecommended = generated.why_recommended;
+    if (topicsJson) {
+      const topics = JSON.parse(topicsJson) as string[] | { topic?: string }[];
+      if (Array.isArray(topics)) {
+        topics.forEach((t) => {
+          if (typeof t === "string") signals.push(t);
+          else if (typeof t === "object" && t.topic) signals.push(t.topic);
+        });
+      }
+    }
+    if (entitiesJson) {
+      const entities = JSON.parse(entitiesJson) as string[];
+      if (Array.isArray(entities)) {
+        signals.push(...entities.slice(0, 3));
+      }
+    }
   } catch {
-    summary = best.title;
-    tldr = "";
-    whyRecommended = "Relevant to your interests";
+    return null;
   }
-
-  // Build provenance
-  const provenance = buildBriefItemProvenance({
-    matchedTopics: best.topics.filter((t) => profile.topicWeights.has(t)),
-    matchedEntities: best.entities.filter((e) => profile.entityWeights.has(e)),
-    safariTopicWeights: profile.safariHistoryImport.topicWeights,
-    safariTopicDomainWeights: profile.safariHistoryImport.topicDomainWeights,
-  });
-
-  // Patch the brief item in place
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.daily_brief_items.update({
-      where: { id: briefItemId },
-      data: {
-        article_id: best.article_id,
-        score: best.score,
-        summary,
-        tldr,
-        why_recommended: whyRecommended,
-        provenance_json: JSON.stringify(provenance),
-      },
-    });
-
-    // Bump the brief's generated_at so the feed header reflects the update
-    await tx.daily_briefs.update({
-      where: { id: brief.id },
-      data: { generated_at: new Date() },
-    });
-  });
-
-  // Build the result shape
-  const signals = deriveMatchedSignals(
-    JSON.stringify(best.topics),
-    JSON.stringify(best.entities)
-  );
-
-  return {
-    id: best.article_id,
-    title: sanitizeFeedTitle(best.title) ?? best.title,
-    source_name: best.source_name,
-    canonical_url: article.canonical_url ?? "#",
-    image_url: article.image_url?.trim() || null,
-    published_at: best.published_at?.toISOString() ?? null,
-    summary,
-    tldr,
-    why_recommended: whyRecommended,
-    matched_signals: signals,
-    provenance,
-    rank: targetItem.rank,
-    score: best.score,
-    brief_item_id: briefItemId,
-    user_feedback: null,
-  };
+  return signals.length > 0 ? signals : null;
 }
