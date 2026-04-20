@@ -61,7 +61,7 @@ type ArchiveStats = {
 const ARCHIVE_BATCH_SIZE = 200;
 
 export function getCurrentArticleCutoff(now: Date = new Date()): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return new Date(now.getTime() - 24 * 60 * 60 * 1000);
 }
 
 function toArchiveData(article: CurrentArticleForArchive, archivedAt: Date) {
