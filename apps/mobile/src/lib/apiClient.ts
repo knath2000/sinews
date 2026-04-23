@@ -1,67 +1,44 @@
-// Type-safe API client for the existing backend endpoints
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabaseClient';
 
-// Define types for our API responses
-export interface FeedItem {
+export interface FeedArticle {
   id: string;
   title: string;
-  url: string;
-  summary: string;
-  publishedAt: string;
-  source: string;
+  snippet: string | null;
+  published_at: string;
+  source_name: string;
+  canonical_url: string;
+  image_url: string | null;
+  editorial_priority: number;
+  summary: string | null;
+  tldr: string | null;
+  why_recommended: string | null;
+  provenance_json: string | null;
+  replacement_outcome: string | null;
+  is_paywalled: boolean;
 }
 
-export interface UserSettings {
-  theme: 'light' | 'dark';
-  notificationsEnabled: boolean;
-  newsletterSubscription: boolean;
+export interface BriefProgress {
+  status: 'pending' | 'generating' | 'completed' | 'failed';
+  progress_message?: string;
+  percent?: number;
 }
 
-export interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  token_type: string;
-  user: {
-    id: string;
-    email: string;
-  };
+export interface TodayBrief {
+  date: string;
+  total_articles: number;
+  articles: FeedArticle[];
+  is_paywalled?: boolean;
 }
 
-// API client class
+interface ApiError {
+  error: string;
+}
+
 class ApiClient {
   private baseUrl: string;
-  private token: string | null = null;
 
   constructor() {
-    // In a real implementation, the base URL would be configurable
     this.baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-
-    // We can retrieve the token from storage when needed
-    this.loadToken();
-  }
-
-  private async loadToken(): Promise<void> {
-    try {
-      this.token = await AsyncStorage.getItem('access_token');
-    } catch (error) {
-      console.error('Failed to load token:', error);
-    }
-  }
-
-  private async saveToken(token: string): Promise<void> {
-    try {
-      await AsyncStorage.setItem('access_token', token);
-      this.token = token;
-    } catch (error) {
-      console.error('Failed to save token:', error);
-    }
-  }
-
-  private async refreshToken(): Promise<string | null> {
-    // Refresh token logic would go here
-    // This is a placeholder for the mobile-specific implementation
-    return this.token;
   }
 
   private async getHeaders(): Promise<Record<string, string>> {
@@ -69,158 +46,102 @@ class ApiClient {
       'Content-Type': 'application/json',
     };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
     }
 
     return headers;
   }
 
-  // Feed endpoint
-  async getFeed(limit: number = 20): Promise<FeedItem[]> {
-    try {
-      const headers = await this.getHeaders();
-      const response = await fetch(`${this.baseUrl}/api/feed?limit=${limit}`, {
-        headers,
-      });
+  async getBrief(): Promise<{ articles: TodayBrief | null; progress: BriefProgress | null }> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`${this.baseUrl}/api/feed`, { headers });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+    if (response.status === 202) {
       const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Failed to fetch feed:', error);
-      throw error;
+      return { articles: null, progress: data as BriefProgress };
     }
+
+    if (!response.ok) {
+      const data = (await response.json()) as ApiError;
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { articles: data as TodayBrief, progress: null };
   }
 
-  // Settings endpoints
-  async getSettings(): Promise<UserSettings> {
-    try {
-      const headers = await this.getHeaders();
-      const response = await fetch(`${this.baseUrl}/api/settings`, {
-        headers,
-      });
+  async submitFeedback(articleId: string, action: 'thumbs_up' | 'thumbs_down'): Promise<{ success: boolean }> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`${this.baseUrl}/api/feedback`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ article_id: articleId, action }),
+    });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Failed to fetch settings:', error);
-      throw error;
+    if (!response.ok) {
+      const data = (await response.json()) as ApiError;
+      throw new Error(data.error || `HTTP ${response.status}`);
     }
+
+    return response.json();
   }
 
-  async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
-    try {
-      const headers = await this.getHeaders();
-      const response = await fetch(`${this.baseUrl}/api/settings`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(settings),
-      });
+  async getUserProfile(): Promise<{ email: string; displayName: string | null; timezone: string | null }> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`${this.baseUrl}/api/me`, { headers });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Failed to update settings:', error);
-      throw error;
+    if (!response.ok) {
+      const data = (await response.json()) as ApiError;
+      throw new Error(data.error || `HTTP ${response.status}`);
     }
+
+    return response.json();
   }
 
-  // Authentication endpoints
-  async signIn(email: string, password: string): Promise<AuthResponse> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/auth/signin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+  async updateProfile(data: { display_name?: string; timezone?: string }): Promise<{ success: boolean }> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`${this.baseUrl}/api/settings/profile`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(data),
+    });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      await this.saveToken(data.access_token);
-      return data;
-    } catch (error) {
-      console.error('Failed to sign in:', error);
-      throw error;
+    if (!response.ok) {
+      const err = (await response.json()) as ApiError;
+      throw new Error(err.error || `HTTP ${response.status}`);
     }
+
+    return response.json();
   }
 
-  async signUp(email: string, password: string): Promise<AuthResponse> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+  async getTopics(): Promise<{ topics: { topic: string; weight: number; source: string }[] }> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`${this.baseUrl}/api/settings/topics`, { headers });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      await this.saveToken(data.access_token);
-      return data;
-    } catch (error) {
-      console.error('Failed to sign up:', error);
-      throw error;
+    if (!response.ok) {
+      const err = (await response.json()) as ApiError;
+      throw new Error(err.error || `HTTP ${response.status}`);
     }
+
+    return response.json();
   }
 
-  // Get current user profile
-  async getUser(): Promise<{ id: string; email: string; createdAt: string }> {
-    try {
-      const headers = await this.getHeaders();
-      const response = await fetch(`${this.baseUrl}/api/me`, {
-        headers,
-      });
+  async toggleTheme(darkMode: boolean): Promise<{ success: boolean }> {
+    const headers = await this.getHeaders();
+    const response = await fetch(`${this.baseUrl}/api/settings/theme`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ dark_mode: darkMode }),
+    });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
-      throw error;
+    if (!response.ok) {
+      const err = (await response.json()) as ApiError;
+      throw new Error(err.error || `HTTP ${response.status}`);
     }
-  }
 
-  async signOut(): Promise<void> {
-    try {
-      const headers = await this.getHeaders();
-      await fetch(`${this.baseUrl}/api/auth/signout`, {
-        method: 'POST',
-        headers,
-      });
-
-      // Clear token from storage
-      await AsyncStorage.removeItem('access_token');
-      this.token = null;
-    } catch (error) {
-      console.error('Failed to sign out:', error);
-      // Even if it fails, we still want to clear the local token
-      await AsyncStorage.removeItem('access_token');
-      this.token = null;
-    }
+    return response.json();
   }
 }
 

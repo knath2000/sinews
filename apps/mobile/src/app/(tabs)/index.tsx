@@ -1,62 +1,124 @@
-import { useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View, Text, SafeAreaView } from 'react-native';
+import { useState, useCallback, useEffect } from 'react';
+import { FlatList, RefreshControl, StyleSheet, View, SafeAreaView, ActivityIndicator } from 'react-native';
+import { Card } from '../../components/Card';
+import { Text } from '../../components/Text';
+import { useTheme } from '../../lib/theme';
+import { spacing } from '../../lib/tokens';
+import { apiClient, FeedArticle } from '../../lib/apiClient';
+import { useAuthState } from '../../contexts/AuthContext';
 
-// Mock data to visualize the structure before wiring up your API Client
-const MOCK_ARTICLES = [
-  { id: '1', source: 'The Verge', rank: '#1', time: '2h ago', title: 'OpenAI releases new reasoning model', isPaywalled: false },
-  { id: '2', source: 'TechCrunch', rank: '#2', time: '4h ago', title: 'Apple Intelligence rollout begins', isPaywalled: true },
-];
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
 
 export default function FeedScreen() {
+  const { theme, isDark } = useTheme();
+  const { user, isLoading } = useAuthState();
+  const [articles, setArticles] = useState<FeedArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = () => {
+  const fetchFeed = useCallback(async () => {
+    try {
+      setError(null);
+      const { articles: brief } = await apiClient.getBrief();
+      setArticles(brief?.articles ?? []);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load briefing';
+      setError(message);
+      console.error('Failed to fetch feed:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchFeed().finally(() => setLoading(false));
+    } else if (!isLoading) {
+      // Auth gate will redirect, but we need to reset loading state
+      setLoading(false);
+    }
+  }, [fetchFeed, user, isLoading]);
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API fetch
-    setTimeout(() => setRefreshing(false), 1500);
+    await fetchFeed();
+    setRefreshing(false);
   };
 
+  // Still loading auth or still fetching feed
+  if (isLoading || (user && loading)) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={isDark ? theme.accent : theme.textDim} />
+          <Text variant="caption" color={theme.textMuted} style={{ marginTop: spacing.md }}>
+            {isLoading ? 'Loading...' : 'Loading your briefing...'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && articles.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={styles.centered}>
+          <Text variant="body" color={theme.textDim}>
+            Could not load briefing
+          </Text>
+          <Text variant="caption" color={theme.textMuted} style={{ marginTop: spacing.xs }}>
+            {error}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.header, { backgroundColor: theme.bg }]}>
+        <Text variant="subheading" color={theme.textDim}>Your daily briefing</Text>
+        <Text variant="display" color={theme.text} style={{ marginTop: spacing.xs }}>
+          {articles.length} article{articles.length !== 1 ? 's' : ''} today
+        </Text>
+      </View>
+
       <FlatList
-        data={MOCK_ARTICLES}
+        data={articles}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#000" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={isDark ? theme.accent : theme.text}
+          />
         }
-        ListHeaderComponent={() => (
-          <View style={styles.header}>
-            <Text style={styles.headerSubtitle}>Good morning, Kyle</Text>
-            <Text style={styles.headerTitle}>Your daily curated briefing</Text>
-          </View>
-        )}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            {/* Meta Row: Source, Rank, Time */}
-            <View style={styles.metaRow}>
-              <View style={styles.pill}><Text style={styles.pillText}>{item.source}</Text></View>
-              <View style={styles.pill}><Text style={styles.pillText}>{item.rank}</Text></View>
-              <Text style={styles.timeText}>{item.time}</Text>
-            </View>
-
-            {/* Title */}
-            <Text style={styles.articleTitle}>{item.title}</Text>
-
-            {/* AI Summary Area (Placeholder for the Paywall Blur) */}
-            <View style={[styles.summaryContainer, item.isPaywalled && styles.paywalledSummary]}>
-              <Text style={styles.summaryText}>
-                {item.isPaywalled
-                  ? "✨ Premium AI Summary Locked"
-                  : "AI Summary: This is where the 3-sentence extraction will live, giving you the immediate takeaways without the fluff."}
-              </Text>
-            </View>
-
-            {/* Action Row: Thumbs Up / Down */}
-            <View style={styles.actionRow}>
-              <View style={styles.actionButton}><Text>👍</Text></View>
-              <View style={styles.actionButton}><Text>👎</Text></View>
-            </View>
+          <Card
+            source={item.source_name}
+            rank=""
+            time={timeAgo(item.published_at)}
+            title={item.title}
+            summary={item.summary ?? item.snippet ?? ''}
+            isPaywalled={item.is_paywalled}
+            style={styles.cardSpacing}
+          />
+        )}
+        ListEmptyComponent={() => (
+          <View style={styles.centered}>
+            <Text variant="body" color={theme.textDim}>No articles in your briefing yet.</Text>
+            <Text variant="caption" color={theme.textMuted} style={{ marginTop: spacing.xs, textAlign: 'center' }}>
+              Your briefing is being generated. Check back in a moment.
+            </Text>
           </View>
         )}
       />
@@ -65,32 +127,24 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  listContent: { padding: 16, paddingBottom: 40 },
-  header: { marginBottom: 24 },
-  headerSubtitle: { fontSize: 14, color: '#666', fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.5 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#111', marginTop: 4 },
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#EAEAEA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+  container: { flex: 1 },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
-  pill: { backgroundColor: '#F4F4F5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  pillText: { fontSize: 12, fontWeight: '600', color: '#3F3F46' },
-  timeText: { fontSize: 12, color: '#A1A1AA', marginLeft: 'auto' },
-  articleTitle: { fontSize: 20, fontWeight: '700', color: '#18181B', marginBottom: 12, lineHeight: 26 },
-  summaryContainer: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, marginBottom: 16 },
-  paywalledSummary: { backgroundColor: '#EEF2FF', opacity: 0.7 },
-  summaryText: { fontSize: 14, color: '#475569', lineHeight: 22 },
-  actionRow: { flexDirection: 'row', gap: 12 },
-  actionButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center' },
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  cardSpacing: {
+    marginBottom: 0,
+  },
 });
